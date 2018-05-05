@@ -1,5 +1,8 @@
+package dreddit
+
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -48,12 +51,12 @@ func (sv *Server) signMessage(m Message) SignedMessage {
 	encoded := encodeMessage(m)
 	hash := sha256.Sum256(encoded)
 
-	sig, err := rsa.SignPKCS1v15(rand.Reader, sv.key, crypto.SHA256, hash[:])
+	sig, err := rsa.SignPKCS1v15(rand.Reader, &sv.key, crypto.SHA256, hash[:])
 	if (err != nil) {
 		fmt.Println("Error in signing message")
 	}
 
-	return SignedMessage{Message: encoded, Hash: hash, PublicKey: sv.key.Public(), Signature: sig}
+	return SignedMessage{Message: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
 }
 
 func (sv *Server) verifyMessage(sm SignedMessage) (Message, bool) {
@@ -65,7 +68,7 @@ func (sv *Server) verifyMessage(sm SignedMessage) (Message, bool) {
 		return message, false
 	}
 
-	if rsa.VerifyPKCS1v15(sm.PublicKey, crypto.SHA256, hash, sm.Signature) != nil {
+	if rsa.VerifyPKCS1v15(&sm.PublicKey, crypto.SHA256, hash[:], sm.Signature) != nil {
 		fmt.Println("Message signature does not match")
 		return message, false
 	}
@@ -81,7 +84,7 @@ func make() *Server {
 	if err != nil {
 		fmt.Println("Error generating RSA keypair")
 	}
-	sv.key = key
+	sv.key = *key
 
 	return sv
 }
