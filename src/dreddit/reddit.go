@@ -6,77 +6,138 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/gob"
 	"fmt"
-	"labgob"
+	"labrpc"
+	"sync"
 	"github.com/rs/xid"
 )
 
-type Message struct {
-	Username string
-	Title    string
-	Body     string
+type Post struct {
+	Username  string
+	Title     string
+	Body      string
 }
 
-type SignedMessage struct {
-	Message   []byte
+type SignedPost struct {
+	Post      []byte
 	Hash      [32]byte
 	PublicKey rsa.PublicKey
 	Signature []byte
 }
 
-type Server struct {
-	id      string
-	key     rsa.PrivateKey
+type Network interface {
+	NewPost(sp SignedPost)
+	GetPost(hash [32]byte) (SignedPost, bool)
 }
 
-func encodeMessage(m Message) []byte {
+type KeepRule func(SignedPost) bool
+
+type Server struct {
+	mu           sync.Mutex
+	
+	id           string
+	key          rsa.PrivateKey
+	
+	net          Network
+	keepRule     KeepRule
+	me           int
+	initialPeers []*labrpc.ClientEnd
+
+	Seeds        map[[32]byte]string
+	Posts        map[[32]byte]SignedPost
+}
+
+func encodePost(p Post, key rsa.PublicKey) []byte {
 	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	e.Encode(m)
+	e := gob.NewEncoder(w)
+	e.Encode(p)
+	e.Encode(key)
 	return w.Bytes()
 }
 
-func decodeMessage(data []byte) Message {
+func decodePost(data []byte) (Post, rsa.PublicKey) {
 	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
+	d := gob.NewDecoder(r)
 	
-	var m Message
-	if d.Decode(&m) != nil {
-		fmt.Println("Error in decoding message")
+	var p Post
+	var key rsa.PublicKey
+	if d.Decode(&p) != nil || d.Decode(&key) != nil {
+		fmt.Println("Error in decoding post")
 	}
-	return m
+	return p, key
 }
 
-func (sv *Server) signMessage(m Message) SignedMessage {
-	encoded := encodeMessage(m)
+func (sv *Server) signPost(p Post) SignedPost {
+	encoded := encodePost(p, sv.key.PublicKey)
 	hash := sha256.Sum256(encoded)
 
 	sig, err := rsa.SignPKCS1v15(rand.Reader, &sv.key, crypto.SHA256, hash[:])
 	if (err != nil) {
-		fmt.Println("Error in signing message")
+		fmt.Println("Error in signing post")
 	}
 
-	return SignedMessage{Message: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
+	return SignedPost{Post: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
 }
 
-func (sv *Server) verifyMessage(sm SignedMessage) (Message, bool) {
-	hash := sha256.Sum256(sm.Message)
-	message := decodeMessage(sm.Message)
+func verifyPost(sp SignedPost, hash [32]byte) (Post, bool) {
+	intHash := sha256.Sum256(sp.Post)
+	post, key := decodePost(sp.Post)
 	
-	if hash != sm.Hash {
-		fmt.Println("Message hash does not match")
-		return message, false
+	if hash != sp.Hash {
+		fmt.Println("Post hash does not match provided hash")
+		return post, false
+	}
+	if intHash != sp.Hash {
+		fmt.Println("Post hash does not match internally")
+		return post, false
 	}
 
-	if rsa.VerifyPKCS1v15(&sm.PublicKey, crypto.SHA256, hash[:], sm.Signature) != nil {
-		fmt.Println("Message signature does not match")
-		return message, false
+	if key.N.Cmp(sp.PublicKey.N) != 0 || key.E != sp.PublicKey.E {
+		fmt.Println("Post key does not match signed key")
+		return post, false
 	}
 
-	return message, true
+	if rsa.VerifyPKCS1v15(&sp.PublicKey, crypto.SHA256, hash[:], sp.Signature) != nil {
+		fmt.Println("Post signature does not match")
+		return post, false
+	}
+
+	return post, true
 }
 
-func make() *Server {
+func (sv *Server) NewPost(p Post) [32]byte {
+	sp := sv.signPost(p)
+	
+	sv.mu.Lock()
+	sv.Seeds[sp.Hash] = sv.id
+	sv.Posts[sp.Hash] = sp
+	sv.mu.Unlock()
+	
+	sv.net.NewPost(sp)
+	return sp.Hash
+}
+
+func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
+	sp, ok := sv.Posts[hash]
+	if ok {
+		return sp, true
+	} else {
+		sp, ok = sv.net.GetPost(hash)
+		if ok {
+			_, good := verifyPost(sp, hash)
+			if good {
+				sv.mu.Lock()
+				sv.Posts[hash] = sp
+				sv.mu.Unlock()
+				return sp, true
+			}
+		}
+		return sp, false
+	}
+}
+
+func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv := &Server{}
 	sv.id = xid.New().String()
 
@@ -85,6 +146,16 @@ func make() *Server {
 		fmt.Println("Error generating RSA keypair")
 	}
 	sv.key = *key
+
+	sv.me = me
+	sv.initialPeers = initialPeers
+
+	sv.Seeds = make(map[[32]byte]string)
+	sv.Posts = make(map[[32]byte]SignedPost)
+
+	// Change this to change the network type.
+	sv.net = MakeBroadcastNetwork(sv)
+	sv.keepRule = RandomKeep
 
 	return sv
 }
