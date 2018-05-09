@@ -14,12 +14,14 @@ import (
 )
 
 type Post struct {
+	// TODO: Support comments - ParentHash Field and ReplyToHash Field
 	Username  string
 	Title     string
 	Body      string
 }
 
 type SignedPost struct {
+	// TODO: Support comments - Seed struct object (self hash, ParentHash, and ReplyToHash)
 	Post      []byte
 	Hash      [32]byte
 	PublicKey rsa.PublicKey
@@ -36,7 +38,7 @@ type KeepRule func(SignedPost) bool
 type Server struct {
 	mu           sync.Mutex
 	
-	id           string
+	//id           string
 	key          rsa.PrivateKey
 	
 	net          Network
@@ -44,7 +46,8 @@ type Server struct {
 	me           int
 	initialPeers []*labrpc.ClientEnd
 
-	Seeds        map[[32]byte]string
+	//Seeds        map[[32]byte]string
+	Seeds        [][32]byte
 	Posts        map[[32]byte]SignedPost
 }
 
@@ -71,7 +74,7 @@ func decodePost(data []byte) (Post, rsa.PublicKey) {
 func (sv *Server) signPost(p Post) SignedPost {
 	encoded := encodePost(p, sv.key.PublicKey)
 	hash := sha256.Sum256(encoded)
-
+	// set ParentHash, ReplyToHash fields
 	sig, err := rsa.SignPKCS1v15(rand.Reader, &sv.key, crypto.SHA256, hash[:])
 	if (err != nil) {
 		fmt.Println("Error in signing post")
@@ -110,7 +113,7 @@ func (sv *Server) NewPost(p Post) [32]byte {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
-	sv.Seeds[sp.Hash] = sv.id
+	sv.Seeds.append(sv.Seeds, sp.Hash)
 	sv.Posts[sp.Hash] = sp
 	sv.mu.Unlock()
 	
@@ -139,7 +142,7 @@ func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
 
 func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv := &Server{}
-	sv.id = xid.New().String()
+	//sv.id = xid.New().String()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -150,7 +153,8 @@ func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv.me = me
 	sv.initialPeers = initialPeers
 
-	sv.Seeds = make(map[[32]byte]string)
+	//sv.Seeds = make(map[[32]byte]string)
+	sv.Seeds = make([][32]byte)
 	sv.Posts = make(map[[32]byte]SignedPost)
 
 	// Change this to change the network type.
