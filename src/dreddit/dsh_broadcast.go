@@ -1,3 +1,7 @@
+package dreddit
+
+/*
+
 import "math/rand"
 import "time"
 
@@ -12,7 +16,7 @@ RANDOM_WALK_LENGTH = 10
 NUM_DOWNLOADS = 4
 GOSSIP_SIZE = 10
 
-func (dn *DredditNode) NewPost(sp SignedPost) (bool){
+func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
@@ -469,3 +473,5 @@ func MakeDredditNode(sv *Server, bool isStorageNode) *DredditNode {
 	// find 8 storage peers on each relevant level
 }
 
+
+*/
