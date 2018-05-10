@@ -46,9 +46,16 @@ type Server struct {
 	
 	net          Network
 	me           int
-	initialPeers []*labrpc.ClientEnd
+	initialPeers []int
+	initialStorage []int
+	initialStoragePeerSame []int
+	initialStoragePeerAbove []int
+	initialStoragePeerBelow []int
+	isStorage bool
+	M byte
+	network []*labrpc.ClientEnd
 
-//	Seeds        []HashTriple
+	//Seeds        []HashTriple
 	Posts        map[HashTriple]SignedPost
 }
 
@@ -146,7 +153,7 @@ func (sv *Server) GetPost(seed HashTriple) (SignedPost, bool) {
 	}
 }
 
-func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
+func Make(initialPeers []int, initialStorage []int, isStorage bool, M byte, initialStoragePeerSame []int, initialStoragePeerAbove []int, initialStoragePeerBelow []int,  network []*labrpc.ClientEnd,  me int) *Server {
 	sv := &Server{}
 	// sv.id = xid.New().String()
 
@@ -158,9 +165,18 @@ func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 
 	sv.me = me
 	sv.initialPeers = initialPeers
+	sv.initialStorage = initialStorage
+	sv.network = network
+	sv.isStorage = isStorage
+	if isStorage{
+		sv.M = M
+		sv.initialStoragePeerBelow = initialStoragePeerBelow
+		sv.initialStoragePeerAbove = sv.initialStoragePeerAbove
+		sv.initialStoragePeerSame = sv.initialStoragePeerSame
+	}
 
 	sv.Posts = make(map[HashTriple]SignedPost)
-//	sv.Seeds = make([]HashTriple)
+	//sv.Seeds = make([]HashTriple)
 
 	// Change this to change the network type.
         // sv.net = MakeBroadcastNetwork(sv)
