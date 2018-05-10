@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"labrpc"
 	"sync"
-	"github.com/rs/xid"
+//	"github.com/rs/xid"
 )
 
 type Post struct {
@@ -33,16 +33,13 @@ type Network interface {
 	GetPost(hash [32]byte) (SignedPost, bool)
 }
 
-type KeepRule func(SignedPost) bool
-
 type Server struct {
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	
 	//id           string
 	key          rsa.PrivateKey
 	
 	net          Network
-	keepRule     KeepRule
 	me           int
 	initialPeers []*labrpc.ClientEnd
 
@@ -113,7 +110,7 @@ func (sv *Server) NewPost(p Post) [32]byte {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
-	sv.Seeds.append(sv.Seeds, sp.Hash)
+	sv.Seeds = append(sv.Seeds, sp.Hash)
 	sv.Posts[sp.Hash] = sp
 	sv.mu.Unlock()
 	
@@ -122,7 +119,9 @@ func (sv *Server) NewPost(p Post) [32]byte {
 }
 
 func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
+	sv.mu.RLock()
 	sp, ok := sv.Posts[hash]
+	sv.mu.RUnlock()
 	if ok {
 		return sp, true
 	} else {
@@ -153,13 +152,11 @@ func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv.me = me
 	sv.initialPeers = initialPeers
 
-	//sv.Seeds = make(map[[32]byte]string)
-	sv.Seeds = make([][32]byte)
 	sv.Posts = make(map[[32]byte]SignedPost)
 
 	// Change this to change the network type.
-	sv.net = MakeBroadcastNetwork(sv)
-	sv.keepRule = RandomKeep
+        // sv.net = MakeBroadcastNetwork(sv)
+	sv.net = MakeBFSNetwork(sv)
 
 	return sv
 }
