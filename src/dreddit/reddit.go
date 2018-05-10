@@ -123,7 +123,7 @@ func (sv *Server) NewPost(p Post) [32]byte {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
-	sv.Seeds.append(sv.Seeds, sp.Seed) // This is changed
+	sv.Seeds = append(sv.Seeds, sp.Seed) // This is changed
 	sv.Posts[sp.Seed] = sp // This is changed
 	sv.mu.Unlock()
 	
