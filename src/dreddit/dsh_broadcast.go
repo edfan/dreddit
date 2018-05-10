@@ -90,12 +90,12 @@ func (dn *DredditNode) GetPost(sd []Seed) ([]SignedPost, bool) {
 	nodeM = sd[0].ParentHash[0]
 
 	ok, current_node := dn.FindStorageLayer(nodeM)
-	
-	if !ok{
-		return false
-	}
 
 	return_posts := make([]SignedPost)
+	
+	if !ok{
+		return return_posts, false
+	}
 
 	counter := 0
 
@@ -457,6 +457,9 @@ type DredditNode struct {
 func MakeDredditNode(sv *Server, bool isStorageNode) *DredditNode {
 	dn := &DredditNode{}
 	dn.sv = sv
+	dn.me = sv.me
+
+
 
 	// find 8 peers
 	// find 8 storage
