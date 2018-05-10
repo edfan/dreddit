@@ -10,11 +10,11 @@ func TestSignMessage(t *testing.T) {
 	fmt.Println("\nStarting TestSignMessage...")
 
 	sv := Make(nil, -1)
-	p := Post{"ezfn", "Test post", "test post please ignore"}
+ 	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
 	fmt.Println("Input post:", p)
 
 	sp := sv.signPost(p)
-	dp, _ := verifyPost(sp, sp.Hash)
+	dp, _ := verifyPost(sp, sp.Seed)
 	fmt.Println("Output post:", dp)
 }
 
@@ -24,7 +24,7 @@ func TestNetworkSimple(t *testing.T) {
 	cfg := make_config(2)
 	defer cfg.cleanup()
 
-	p := Post{"ezfn", "Test post", "test post please ignore"}
+ 	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
 	fmt.Println("Input post:", p)
 	hash :=	cfg.servers[0].NewPost(p)
 	
@@ -41,12 +41,12 @@ func TestNetworkConcurrentNewPosts(t *testing.T) {
 	n := 25
 	cfg := make_config(n)
 	defer cfg.cleanup()
-	hashes := make([][32]byte, n)
+	hashes := make([]HashTriple, n)
 
 	for i := 0; i < n; i++ {
 		go func(i int) {
-			p := Post{"ezfn", "Test post",
-				fmt.Sprintf("test post from %d", i)}
+			p := Post{Username: "ezfn", Title: "Test post",
+				Body: fmt.Sprintf("test post from %d", i)}
 			hashes[i] = cfg.servers[i].NewPost(p)
 		}(i)
 	}
@@ -64,6 +64,7 @@ func TestNetworkConcurrentNewPosts(t *testing.T) {
 				// fmt.Printf("Server %d has post from %d\n", i, j)
 			} else {
 				fmt.Printf("Server %d missing post from %d, post received %v\n", i, j, p)
+				t.Fail()
 			}
 		}
 	}
@@ -74,11 +75,11 @@ func TestNetworkDisconnect(t *testing.T) {
 
 	fmt.Println("\nStarting TestNetworkDisconnect...")
 
-	n := 5
-	s := 3
+	n := 25
+	s := 15
 	cfg := make_config(n)
 	defer cfg.cleanup()
-	hashes := make([][32]byte, n)
+	hashes := make([]HashTriple, n)
 
 	// Disconnect the last n-s nodes.
 	for i := s; i < n; i++ {
@@ -87,8 +88,8 @@ func TestNetworkDisconnect(t *testing.T) {
 
 	for i := 0; i < s; i++ {
 		go func(i int) {
-			p := Post{"ezfn", "Test post",
-				fmt.Sprintf("test post from %d", i)}
+			p := Post{Username: "ezfn", Title: "Test post",
+				Body: fmt.Sprintf("test post from %d", i)}
 			hashes[i] = cfg.servers[i].NewPost(p)
 		}(i)
 	}
@@ -112,6 +113,7 @@ func TestNetworkDisconnect(t *testing.T) {
 				// fmt.Printf("Server %d has post from %d\n", i, j)
 			} else {
 				fmt.Printf("Server %d missing post from %d, post received %v\n", i, j, p)
+				t.Fail()
 			}
 		}
 	}

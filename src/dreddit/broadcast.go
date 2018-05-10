@@ -12,7 +12,7 @@ type BroadcastNetwork struct {
 	me    *labrpc.ClientEnd
 	peers []*labrpc.ClientEnd
 
-	seeds map[[32]byte]int
+	seeds map[HashTriple]int
 }
 
 const BroadcastKeepPercent = 0.2
@@ -21,9 +21,9 @@ func (n *BroadcastNetwork) keep(sp SignedPost) bool {
 	return rand.Float32() < BroadcastKeepPercent
 }
 
-func (n *BroadcastNetwork) NewPost(sp SignedPost) {
+func (n *BroadcastNetwork) NewPost(sp SignedPost) bool {
 	n.mu.Lock()
-	n.seeds[sp.Hash] = n.sv.me
+	n.seeds[sp.Seed] = n.sv.me
 	n.mu.Unlock()
 	
 	for i := 0; i < len(n.peers); i++ {
@@ -31,9 +31,11 @@ func (n *BroadcastNetwork) NewPost(sp SignedPost) {
 			go n.makeReceivePost(n.peers[i], sp, n.sv.me)
 		}
 	}
+
+	return true
 }
 
-func (n *BroadcastNetwork) GetPost(hash [32]byte) (SignedPost, bool) {
+func (n *BroadcastNetwork) GetPost(hash HashTriple) (SignedPost, bool) {
 	// Try saved origin first.
 	origin, ok := n.seeds[hash]
 	if ok {
@@ -79,15 +81,15 @@ type BroadcastReceivePostReply struct {
 }
 
 func (n *BroadcastNetwork) ReceivePost(args *BroadcastReceivePostArgs, reply *BroadcastReceivePostReply) {
-	_, ok := verifyPost(args.Sp, args.Sp.Hash)
+	_, ok := verifyPost(args.Sp, args.Sp.Seed)
 	if ok {
 		n.mu.Lock()
-		n.seeds[args.Sp.Hash] = args.Origin
+		n.seeds[args.Sp.Seed] = args.Origin
 		n.mu.Unlock()
 		
 		if n.keep(args.Sp) {
 			n.sv.mu.Lock()
-			n.sv.Posts[args.Sp.Hash] = args.Sp
+			n.sv.Posts[args.Sp.Seed] = args.Sp
 			n.sv.mu.Unlock()
 		}
 		
@@ -116,7 +118,7 @@ func (n *BroadcastNetwork) makeReceivePost(server *labrpc.ClientEnd, sp SignedPo
 }
 
 type BroadcastRequestPostArgs struct {
-	Hash [32]byte
+	Hash HashTriple
 }
 
 type BroadcastRequestPostReply struct {
@@ -147,7 +149,7 @@ func MakeBroadcastNetwork(sv *Server) *BroadcastNetwork {
 	if n.sv.me >= 0 {
 		n.me = n.peers[n.sv.me]
 	}
-	n.seeds = make(map[[32]byte]int)
+	n.seeds = make(map[HashTriple]int)
 
 	return n
 }

@@ -28,15 +28,17 @@ func (n *BFSNetwork) keep(sp SignedPost) bool {
 	return rand.Float32() < BFSKeepPercent
 }
 
-func (n *BFSNetwork) NewPost(sp SignedPost) {
-	n.seeds.Store(sp.Hash, n.sv.me)
+func (n *BFSNetwork) NewPost(sp SignedPost) bool {
+	n.seeds.Store(sp.Seed, n.sv.me)
 	
 	for i := 0; i < len(n.peers); i++ {
 		go n.makeReceivePost(n.peers[i], sp, n.sv.me)
 	}
+
+	return true
 }
 
-func (n *BFSNetwork) GetPostRecursive(hash [32]byte) (SignedPost, bool) {
+func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 	// Using seeds as a map to known server that had post at some point, recurse.
 	
 	lastStored, ok := n.seeds.Load(hash)
@@ -73,7 +75,7 @@ func (n *BFSNetwork) GetPostRecursive(hash [32]byte) (SignedPost, bool) {
 	return SignedPost{}, false
 }
 
-func (n *BFSNetwork) GetPost(hash [32]byte) (SignedPost, bool) {
+func (n *BFSNetwork) GetPost(hash HashTriple) (SignedPost, bool) {
 	fmt.Printf("Server %d calling GetPost\n", n.sv.me)
 	
 	// Try saved peer first.
@@ -108,16 +110,16 @@ type BFSReceivePostReply struct {
 }
 
 func (n *BFSNetwork) ReceivePost(args *BFSReceivePostArgs, reply *BFSReceivePostReply) {
-	_, ok := n.seeds.Load(args.Sp.Hash)
+	_, ok := n.seeds.Load(args.Sp.Seed)
 
 	if !ok {
-		_, ok := verifyPost(args.Sp, args.Sp.Hash)
+		_, ok := verifyPost(args.Sp, args.Sp.Seed)
 		if ok {
-			n.seeds.Store(args.Sp.Hash, args.LastStored)
+			n.seeds.Store(args.Sp.Seed, args.LastStored)
 			
 			if n.keep(args.Sp) {
 				n.sv.mu.Lock()
-				n.sv.Posts[args.Sp.Hash] = args.Sp
+				n.sv.Posts[args.Sp.Seed] = args.Sp
 				n.sv.mu.Unlock()
 				
 				reply.Stored = true
@@ -150,7 +152,7 @@ func (n *BFSNetwork) makeReceivePost(server int, sp SignedPost, lastStored int) 
 		
 		if status {
 			if reply.Stored {
-				n.seeds.Store(args.Sp.Hash, server)
+				n.seeds.Store(args.Sp.Seed, server)
 			}
 			return
 		}
@@ -159,7 +161,7 @@ func (n *BFSNetwork) makeReceivePost(server int, sp SignedPost, lastStored int) 
 }
 
 type BFSRequestPostArgs struct {
-	Hash [32]byte
+	Hash HashTriple
 }
 
 type BFSRequestPostReply struct {

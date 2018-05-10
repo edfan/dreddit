@@ -14,38 +14,42 @@ import (
 )
 
 type Post struct {
-	// TODO: Support comments - ParentHash Field and ReplyToHash Field
 	Username  string
 	Title     string
 	Body      string
+	ParentHash [32]byte
+	ReplyToHash [32]byte
 }
 
 type SignedPost struct {
-	// TODO: Support comments - Seed struct object (self hash, ParentHash, and ReplyToHash)
 	Post      []byte
-	Hash      [32]byte
+	Seed      HashTriple
 	PublicKey rsa.PublicKey
 	Signature []byte
 }
 
+type HashTriple struct {
+	Hash [32]byte
+	ParentHash [32]byte
+	ReplyToHash [32]byte
+}
+
 type Network interface {
-	NewPost(sp SignedPost)
-	GetPost(hash [32]byte) (SignedPost, bool)
+	NewPost(sp SignedPost) bool
+	GetPost(seed HashTriple) (SignedPost, bool)
 }
 
 type Server struct {
 	mu           sync.RWMutex
 	
-	//id           string
 	key          rsa.PrivateKey
 	
 	net          Network
 	me           int
 	initialPeers []*labrpc.ClientEnd
 
-	//Seeds        map[[32]byte]string
-	Seeds        [][32]byte
-	Posts        map[[32]byte]SignedPost
+//	Seeds        []HashTriple
+	Posts        map[HashTriple]SignedPost
 }
 
 func encodePost(p Post, key rsa.PublicKey) []byte {
@@ -71,24 +75,24 @@ func decodePost(data []byte) (Post, rsa.PublicKey) {
 func (sv *Server) signPost(p Post) SignedPost {
 	encoded := encodePost(p, sv.key.PublicKey)
 	hash := sha256.Sum256(encoded)
-	// set ParentHash, ReplyToHash fields
 	sig, err := rsa.SignPKCS1v15(rand.Reader, &sv.key, crypto.SHA256, hash[:])
 	if (err != nil) {
 		fmt.Println("Error in signing post")
 	}
-
-	return SignedPost{Post: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
+	
+	ht := HashTriple{Hash: hash, ParentHash: p.ParentHash, ReplyToHash: p.ReplyToHash}
+	return SignedPost{Post: encoded, Seed: ht, PublicKey: sv.key.PublicKey, Signature: sig}
 }
 
-func verifyPost(sp SignedPost, hash [32]byte) (Post, bool) {
+func verifyPost(sp SignedPost, sd HashTriple) (Post, bool) {
 	intHash := sha256.Sum256(sp.Post)
 	post, key := decodePost(sp.Post)
 	
-	if hash != sp.Hash {
+	if sd != sp.Seed {
 		fmt.Println("Post hash does not match provided hash")
 		return post, false
 	}
-	if intHash != sp.Hash {
+	if intHash != sp.Seed.Hash {
 		fmt.Println("Post hash does not match internally")
 		return post, false
 	}
@@ -98,39 +102,42 @@ func verifyPost(sp SignedPost, hash [32]byte) (Post, bool) {
 		return post, false
 	}
 
-	if rsa.VerifyPKCS1v15(&sp.PublicKey, crypto.SHA256, hash[:], sp.Signature) != nil {
+	if rsa.VerifyPKCS1v15(&sp.PublicKey, crypto.SHA256, sd.Hash[:], sp.Signature) != nil {
 		fmt.Println("Post signature does not match")
 		return post, false
 	}
-
+	
 	return post, true
 }
 
-func (sv *Server) NewPost(p Post) [32]byte {
+func (sv *Server) NewPost(p Post) HashTriple {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
-	sv.Seeds = append(sv.Seeds, sp.Hash)
-	sv.Posts[sp.Hash] = sp
+//	sv.Seeds = append(sv.Seeds, sp.Seed)
+	sv.Posts[sp.Seed] = sp
 	sv.mu.Unlock()
+
+	ok := false
+	for !ok {
+		ok = sv.net.NewPost(sp)
+	}
 	
-	sv.net.NewPost(sp)
-	return sp.Hash
+	return sp.Seed
 }
 
-func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
-	sv.mu.RLock()
-	sp, ok := sv.Posts[hash]
-	sv.mu.RUnlock()
+
+func (sv *Server) GetPost(seed HashTriple) (SignedPost, bool) {
+	sp, ok := sv.Posts[seed]
 	if ok {
 		return sp, true
 	} else {
-		sp, ok = sv.net.GetPost(hash)
+		sp, ok = sv.net.GetPost(seed)
 		if ok {
-			_, good := verifyPost(sp, hash)
+			_, good := verifyPost(sp, seed)
 			if good {
 				sv.mu.Lock()
-				sv.Posts[hash] = sp
+				sv.Posts[seed] = sp
 				sv.mu.Unlock()
 				return sp, true
 			}
@@ -141,7 +148,7 @@ func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
 
 func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv := &Server{}
-	//sv.id = xid.New().String()
+	// sv.id = xid.New().String()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -152,7 +159,8 @@ func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv.me = me
 	sv.initialPeers = initialPeers
 
-	sv.Posts = make(map[[32]byte]SignedPost)
+	sv.Posts = make(map[HashTriple]SignedPost)
+//	sv.Seeds = make([]HashTriple)
 
 	// Change this to change the network type.
         // sv.net = MakeBroadcastNetwork(sv)
