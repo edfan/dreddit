@@ -127,7 +127,12 @@ func (sv *Server) NewPost(p Post) [32]byte {
 	sv.Posts[sp.Seed] = sp // This is changed
 	sv.mu.Unlock()
 	
-	sv.net.NewPost(sp)
+
+	ok := false
+
+	for !ok{
+		ok = sv.net.NewPost(sp)
+	}
 	return sp.Seed // This is changed
 }
 
