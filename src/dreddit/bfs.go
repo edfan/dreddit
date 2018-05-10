@@ -15,12 +15,11 @@ func min(x, y int) int {
 }
 
 type BFSNetwork struct {
-	mu    sync.RWMutex
 	sv    *Server
 	
 	net   []*labrpc.ClientEnd
 	peers []int
-	seeds map[[32]byte]int
+	seeds sync.Map
 }
 
 const BFSKeepPercent = 0.2
@@ -30,9 +29,7 @@ func (n *BFSNetwork) keep(sp SignedPost) bool {
 }
 
 func (n *BFSNetwork) NewPost(sp SignedPost) {
-	n.mu.Lock()
-	n.seeds[sp.Hash] = n.sv.me
-	n.mu.Unlock()
+	n.seeds.Store(sp.Hash, n.sv.me)
 	
 	for i := 0; i < len(n.peers); i++ {
 		go n.makeReceivePost(n.peers[i], sp, n.sv.me)
@@ -42,47 +39,42 @@ func (n *BFSNetwork) NewPost(sp SignedPost) {
 func (n *BFSNetwork) GetPostRecursive(hash [32]byte) (SignedPost, bool) {
 	// Using seeds as a map to known server that had post at some point, recurse.
 	
-	n.mu.RLock()
-	lastStored, ok := n.seeds[hash]
-	n.mu.RUnlock()
+	lastStored, ok := n.seeds.Load(hash)
 	for ok {
-		// fmt.Printf("Server %d asking %d\n", n.sv.me, lastStored)
+		fmt.Printf("Server %d asking %d\n", n.sv.me, lastStored)
 		args := BFSRequestPostArgs{Hash: hash}
 		var reply BFSRequestPostReply
 		
-		status := n.sendRequestPost(lastStored, &args, &reply)
+		status := n.sendRequestPost(lastStored.(int), &args, &reply)
 		
-		n.mu.Lock()
 		if status {
 			if reply.Success {
-				// fmt.Printf("Server %d found post on %d\n", n.sv.me, lastStored)
+				fmt.Printf("Server %d found post on %d\n", n.sv.me, lastStored)
 				_, ok := verifyPost(reply.Sp, hash)
 				if ok {
-					n.mu.Unlock()
 					return reply.Sp, true
 				}
 			} else {
 				if reply.Redirect == -1 {
-					// fmt.Printf("Server %d got dead redirect from %d\n", n.sv.me, lastStored)
-					delete(n.seeds, hash)
+					fmt.Printf("Server %d got dead redirect from %d\n", n.sv.me, lastStored)
+					n.seeds.Delete(hash)
 				} else {
-					// fmt.Printf("Server %d got redirect %d from %d\n", n.sv.me, reply.Redirect, lastStored)
-					n.seeds[hash] = reply.Redirect
+					fmt.Printf("Server %d got redirect %d from %d\n", n.sv.me, reply.Redirect, lastStored)
+					n.seeds.Store(hash, reply.Redirect)
 				}
 			}
 		} else {
-			delete(n.seeds, hash)
+			n.seeds.Delete(hash)
 		}
 
-		lastStored, ok = n.seeds[hash]
-		n.mu.Unlock()
+		lastStored, ok = n.seeds.Load(hash)
 	}
 
 	return SignedPost{}, false
 }
 
 func (n *BFSNetwork) GetPost(hash [32]byte) (SignedPost, bool) {
-	// fmt.Printf("Server %d calling GetPost\n", n.sv.me)
+	fmt.Printf("Server %d calling GetPost\n", n.sv.me)
 	
 	// Try saved peer first.
 	sp, ok := n.GetPostRecursive(hash)
@@ -91,10 +83,9 @@ func (n *BFSNetwork) GetPost(hash [32]byte) (SignedPost, bool) {
 	}
 	
 	// Ask peers for help.
+	fmt.Printf("Server %d asking peers\n", n.sv.me)
 	for i := 0; i < len(n.peers); i++ {
-		n.mu.Lock()
-		n.seeds[sp.Hash] = i
-		n.mu.Unlock()
+		n.seeds.Store(hash, n.peers[i])
 
 		sp, ok = n.GetPostRecursive(hash)
 		if ok {
@@ -117,16 +108,12 @@ type BFSReceivePostReply struct {
 }
 
 func (n *BFSNetwork) ReceivePost(args *BFSReceivePostArgs, reply *BFSReceivePostReply) {
-	n.mu.RLock()
-	_, ok := n.seeds[args.Sp.Hash]
-	n.mu.RUnlock()
+	_, ok := n.seeds.Load(args.Sp.Hash)
 
 	if !ok {
 		_, ok := verifyPost(args.Sp, args.Sp.Hash)
 		if ok {
-			n.mu.Lock()
-			n.seeds[args.Sp.Hash] = args.LastStored
-			n.mu.Unlock()
+			n.seeds.Store(args.Sp.Hash, args.LastStored)
 			
 			if n.keep(args.Sp) {
 				n.sv.mu.Lock()
@@ -153,9 +140,9 @@ func (n *BFSNetwork) sendReceivePost(server int, args *BFSReceivePostArgs, reply
 }
 
 func (n *BFSNetwork) makeReceivePost(server int, sp SignedPost, lastStored int) {
-	retry := true
-	
-	for retry {
+	retry := 0
+
+	for retry < 10 {
 		args := BFSReceivePostArgs{Sp: sp, LastStored: lastStored}
 		var reply BFSReceivePostReply
 		
@@ -163,12 +150,11 @@ func (n *BFSNetwork) makeReceivePost(server int, sp SignedPost, lastStored int) 
 		
 		if status {
 			if reply.Stored {
-				n.mu.Lock()
-				n.seeds[args.Sp.Hash] = server
-				n.mu.Unlock()
+				n.seeds.Store(args.Sp.Hash, server)
 			}
-			retry = false
+			return
 		}
+		retry++
 	}
 }
 
@@ -193,10 +179,9 @@ func (n *BFSNetwork) RequestPost(args *BFSRequestPostArgs, reply *BFSRequestPost
 		reply.Success = true
 	} else {
 		// Send forwarding information, if we have it.
-		n.mu.RLock()
-		lastStored, ok := n.seeds[args.Hash]
+		lastStored, ok := n.seeds.Load(args.Hash)
 		if ok {
-			reply.Redirect = lastStored
+			reply.Redirect = lastStored.(int)
 		} else {
 			reply.Redirect = -1
 		}
@@ -214,7 +199,11 @@ func (n *BFSNetwork) findRandomPeers(rootPeer int) {
 
 	var peers []int
 	for i := 0; i < min(len(n.net) - 1, 8); i++ {
-		peers = append(peers, rand.Intn(len(n.net)))
+		r := rand.Intn(len(n.net))
+		for r == n.sv.me {
+			r = rand.Intn(len(n.net))
+		}
+		peers = append(peers, r)
 	}
 	n.peers = peers
 	fmt.Printf("Peers on %d are %v\n", n.sv.me, n.peers)
@@ -225,7 +214,6 @@ func MakeBFSNetwork(sv *Server) *BFSNetwork {
 
 	n.sv = sv
 	n.net = sv.initialPeers
-	n.seeds = make(map[[32]byte]int)
 
 	n.findRandomPeers(0)
 
