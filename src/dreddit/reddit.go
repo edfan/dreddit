@@ -18,19 +18,28 @@ type Post struct {
 	Username  string
 	Title     string
 	Body      string
+	ParentHash [32]byte
+	ReplyToHash [32]byte
 }
 
 type SignedPost struct {
-	// TODO: Support comments - Seed struct object (self hash, ParentHash, and ReplyToHash)
+	// TODO: Support comments - Seed struct object (self hash, ParentHash, and reply to hash)
 	Post      []byte
-	Hash      [32]byte
+	//Hash      [32]byte
+	Seed     HashTriple
 	PublicKey rsa.PublicKey
 	Signature []byte
 }
 
+type HashTriple struct {
+	Hash [32]byte
+	ParentHash [32]byte
+	ReplyToHash [32]byte
+}
+
 type Network interface {
 	NewPost(sp SignedPost)
-	GetPost(hash [32]byte) (SignedPost, bool)
+	GetPost(seed HashTriple) (SignedPost, bool)
 }
 
 type KeepRule func(SignedPost) bool
@@ -47,7 +56,7 @@ type Server struct {
 	initialPeers []*labrpc.ClientEnd
 
 	//Seeds        map[[32]byte]string
-	Seeds        [][32]byte
+	Seeds        []HashTriple
 	Posts        map[[32]byte]SignedPost
 }
 
@@ -79,19 +88,20 @@ func (sv *Server) signPost(p Post) SignedPost {
 	if (err != nil) {
 		fmt.Println("Error in signing post")
 	}
-
-	return SignedPost{Post: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
+	
+	//return SignedPost{Post: encoded, Hash: hash, PublicKey: sv.key.PublicKey, Signature: sig}
+	return SignedPost{Post: encoded, Seed: {Hash: hash, ParentHash: p.ParentHash, ReplyToHash: p.ReplyToHash}, PublicKey: sv.key.PublicKey, Signature: sig}
 }
 
-func verifyPost(sp SignedPost, hash [32]byte) (Post, bool) {
+func verifyPost(sp SignedPost, sd HashTriple) (Post, bool) { // This is changed
 	intHash := sha256.Sum256(sp.Post)
 	post, key := decodePost(sp.Post)
 	
-	if hash != sp.Hash {
+	if sd != sp.Seed { // This is changed
 		fmt.Println("Post hash does not match provided hash")
 		return post, false
 	}
-	if intHash != sp.Hash {
+	if intHash != sp.Seed.Hash { // This is changed
 		fmt.Println("Post hash does not match internally")
 		return post, false
 	}
@@ -101,7 +111,7 @@ func verifyPost(sp SignedPost, hash [32]byte) (Post, bool) {
 		return post, false
 	}
 
-	if rsa.VerifyPKCS1v15(&sp.PublicKey, crypto.SHA256, hash[:], sp.Signature) != nil {
+	if rsa.VerifyPKCS1v15(&sp.PublicKey, crypto.SHA256, sd.Hash[:], sp.Signature) != nil { // This is changed
 		fmt.Println("Post signature does not match")
 		return post, false
 	}
@@ -113,27 +123,29 @@ func (sv *Server) NewPost(p Post) [32]byte {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
-	sv.Seeds.append(sv.Seeds, sp.Hash)
-	sv.Posts[sp.Hash] = sp
+	sv.Seeds.append(sv.Seeds, sp.Seed) // This is changed
+	sv.Posts[sp.Seed] = sp // This is changed
 	sv.mu.Unlock()
 	
 	sv.net.NewPost(sp)
-	return sp.Hash
+	return sp.Seed // This is changed
 }
 
-func (sv *Server) GetPost(hash [32]byte) (SignedPost, bool) {
-	sp, ok := sv.Posts[hash]
+func (sv *Server) GetPost(seeds []HashTriple) (SignedPost, bool) { // This is changed
+	sp, ok := sv.Posts[seed] // This is changed
 	if ok {
 		return sp, true
 	} else {
-		sp, ok = sv.net.GetPost(hash)
+		sp, ok = sv.net.GetPost(seeds) // This is changed
 		if ok {
-			_, good := verifyPost(sp, hash)
-			if good {
-				sv.mu.Lock()
-				sv.Posts[hash] = sp
-				sv.mu.Unlock()
-				return sp, true
+			for i := range seeds{ // This is changed
+				_, good := verifyPost(sp[i], seed[i]) // This is changed
+				if good {
+					sv.mu.Lock()
+					sv.Posts[seed[i]] = sp[i] // This is changed
+					sv.mu.Unlock()
+					return sp, true
+				}
 			}
 		}
 		return sp, false
@@ -154,8 +166,8 @@ func Make(initialPeers []*labrpc.ClientEnd, me int) *Server {
 	sv.initialPeers = initialPeers
 
 	//sv.Seeds = make(map[[32]byte]string)
-	sv.Seeds = make([][32]byte)
-	sv.Posts = make(map[[32]byte]SignedPost)
+	sv.Seeds = make([]HashTriple) // This is changed
+	sv.Posts = make(map[HashTriple]SignedPost) // This is changed
 
 	// Change this to change the network type.
 	sv.net = MakeBroadcastNetwork(sv)
