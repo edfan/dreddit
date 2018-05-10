@@ -2,6 +2,7 @@ package dreddit
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -103,6 +104,52 @@ func TestNetworkDisconnect(t *testing.T) {
 		cfg.connect(i)
 	}
 	
+
+	for i := 0; i < n; i++ {
+		for j := 0; j < s; j++ {
+			fmt.Printf("Server %d looking for post from %d\n", i, j)
+			op, _ := cfg.servers[i].GetPost(hashes[j])
+			p, ok := verifyPost(op, hashes[j])
+			if ok {
+				// fmt.Printf("Server %d has post from %d\n", i, j)
+			} else {
+				fmt.Printf("Server %d missing post from %d, post received %v\n", i, j, p)
+				t.Fail()
+			}
+		}
+	}
+}
+
+func TestDeletePosts(t *testing.T) {
+	// This test empties the post cache on some servers, then checks for reachability.
+	
+	fmt.Println("\nStarting TestDeletePosts...")
+
+	n := 25
+	s := 10
+	cfg := make_config(n)
+	defer cfg.cleanup()
+	hashes := make([]HashTriple, n)
+
+	for i := 0; i < s; i++ {
+		go func(i int) {
+			p := Post{Username: "ezfn", Title: "Test post",
+				Body: fmt.Sprintf("test post from %d", i)}
+			hashes[i] = cfg.servers[i].NewPost(p)
+		}(i)
+	}
+
+	fmt.Println("Sends started")
+
+	time.Sleep(5 * time.Second)
+
+	// On s random nodes, delete all posts except those authored by the node.
+	for i := s; i < n; i++ {
+		r := rand.Intn(n)
+		rp := cfg.servers[r].Posts[hashes[r]]
+		cfg.servers[r].Posts = make(map[HashTriple]SignedPost)
+		cfg.servers[r].Posts[hashes[r]] = rp
+	}
 
 	for i := 0; i < n; i++ {
 		for j := 0; j < s; j++ {

@@ -40,9 +40,14 @@ func (n *BFSNetwork) NewPost(sp SignedPost) bool {
 
 func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 	// Using seeds as a map to known server that had post at some point, recurse.
+
+	// Avoid cycles.
+	seen := make(map[int]bool)
+	seen[-1] = true
 	
 	lastStored, ok := n.seeds.Load(hash)
 	for ok {
+		seen[lastStored.(int)] = true
 		fmt.Printf("Server %d asking %d\n", n.sv.me, lastStored)
 		args := BFSRequestPostArgs{Hash: hash}
 		var reply BFSRequestPostReply
@@ -57,7 +62,7 @@ func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 					return reply.Sp, true
 				}
 			} else {
-				if reply.Redirect == -1 {
+				if seen[reply.Redirect] {
 					fmt.Printf("Server %d got dead redirect from %d\n", n.sv.me, lastStored)
 					n.seeds.Delete(hash)
 				} else {
