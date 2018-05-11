@@ -27,14 +27,18 @@ type Client struct {
 	NewPostCh chan Post
 }
 
+func createHeader(sp SignedPost) Header {
+	p, _ := verifyPost(sp, sp.Seed)
+	return Header{Username: p.Username, Title: p.Title,
+		PublicKey: sp.PublicKey, Seed: sp.Seed}
+}
+
 func (c *Client) PostReader() {
 	// Long-running function that reads in posts from PostCh.
 	for {
 		select {
 		case sp := <- c.Sv.PostsCh:
-			p, _ := verifyPost(sp, sp.Seed)
-			h := Header{Username: p.Username, Title: p.Title,
-				PublicKey: sp.PublicKey, Seed: sp.Seed}
+			h := createHeader(sp)
 			c.HeaderCh <- h
 			c.PostQueue = append(c.PostQueue, h)
 			c.PostCount++
@@ -51,8 +55,7 @@ func (c *Client) NewPostReader() {
 		select {
 		case p := <- c.NewPostCh:
 			sp := c.Sv.NewPost(p)
-			h := Header{Username: p.Username, Title: p.Title,
-				PublicKey: sp.PublicKey, Seed: sp.Seed}
+			h := createHeader(sp)
 			c.HeaderCh <- h
 			c.PostQueue = append(c.PostQueue, h)
 			c.PostCount++

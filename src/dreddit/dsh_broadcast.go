@@ -19,6 +19,8 @@ RANDOM_WALK_LENGTH = 10
 NUM_DOWNLOADS = 4
 GOSSIP_SIZE = 10
 
+*/
+
 type dshOptions struct {
 	initialPeers []int
 	initialStorage []int
@@ -28,6 +30,8 @@ type dshOptions struct {
 	initialStoragePeerAbove []int
 	initialStoragePeerBelow []int
 }
+
+/*
 
 func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
