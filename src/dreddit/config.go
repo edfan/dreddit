@@ -69,7 +69,7 @@ func (cfg *config) start1(i int) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
-	sv := Make(ends, i)
+	sv := MakeServer(ends, i, nil)
 	cfg.servers[i] = sv
 
 	svc := labrpc.MakeService(sv.net)

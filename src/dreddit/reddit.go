@@ -46,17 +46,12 @@ type Server struct {
 	
 	net          Network
 	me           int
-	initialPeers []int
-	initialStorage []int
-	initialStoragePeerSame []int
-	initialStoragePeerAbove []int
-	initialStoragePeerBelow []int
-	isStorage bool
-	M byte
-	network []*labrpc.ClientEnd
+	network      []*labrpc.ClientEnd
 
 	//Seeds        []HashTriple
 	Posts        map[HashTriple]SignedPost
+
+	PostsCh      chan SignedPost
 }
 
 func encodePost(p Post, key rsa.PublicKey) []byte {
@@ -117,7 +112,7 @@ func verifyPost(sp SignedPost, sd HashTriple) (Post, bool) {
 	return post, true
 }
 
-func (sv *Server) NewPost(p Post) HashTriple {
+func (sv *Server) NewPost(p Post) SignedPost {
 	sp := sv.signPost(p)
 	
 	sv.mu.Lock()
@@ -130,7 +125,7 @@ func (sv *Server) NewPost(p Post) HashTriple {
 		ok = sv.net.NewPost(sp)
 	}
 	
-	return sp.Seed
+	return sp
 }
 
 
@@ -153,7 +148,7 @@ func (sv *Server) GetPost(seed HashTriple) (SignedPost, bool) {
 	}
 }
 
-func Make(initialPeers []int, initialStorage []int, isStorage bool, M byte, initialStoragePeerSame []int, initialStoragePeerAbove []int, initialStoragePeerBelow []int,  network []*labrpc.ClientEnd,  me int) *Server {
+func MakeServer(network []*labrpc.ClientEnd, me int, options interface{}) *Server {
 	sv := &Server{}
 	// sv.id = xid.New().String()
 
@@ -163,20 +158,11 @@ func Make(initialPeers []int, initialStorage []int, isStorage bool, M byte, init
 	}
 	sv.key = *key
 
-	sv.me = me
-	sv.initialPeers = initialPeers
-	sv.initialStorage = initialStorage
 	sv.network = network
-	sv.isStorage = isStorage
-	if isStorage{
-		sv.M = M
-		sv.initialStoragePeerBelow = initialStoragePeerBelow
-		sv.initialStoragePeerAbove = sv.initialStoragePeerAbove
-		sv.initialStoragePeerSame = sv.initialStoragePeerSame
-	}
-
+	sv.me = me
+	
 	sv.Posts = make(map[HashTriple]SignedPost)
-	//sv.Seeds = make([]HashTriple)
+	sv.PostsCh = make(chan SignedPost, 10)
 
 	// Change this to change the network type.
         // sv.net = MakeBroadcastNetwork(sv)

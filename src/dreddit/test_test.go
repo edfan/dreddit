@@ -10,7 +10,7 @@ import (
 func TestSignMessage(t *testing.T) {
 	fmt.Println("\nStarting TestSignMessage...")
 
-	sv := Make(nil, -1)
+	sv := MakeServer(nil, -1, nil)
  	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
 	fmt.Println("Input post:", p)
 
@@ -27,7 +27,7 @@ func TestNetworkSimple(t *testing.T) {
 
  	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
 	fmt.Println("Input post:", p)
-	hash :=	cfg.servers[0].NewPost(p)
+	hash :=	cfg.servers[0].NewPost(p).Seed
 	
 	time.Sleep(100 * time.Millisecond)
 	
@@ -48,7 +48,7 @@ func TestNetworkConcurrentNewPosts(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p)
+			hashes[i] = cfg.servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -91,7 +91,7 @@ func TestNetworkDisconnect(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p)
+			hashes[i] = cfg.servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -135,7 +135,7 @@ func TestDeletePosts(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p)
+			hashes[i] = cfg.servers[i].NewPost(p).Seed
 		}(i)
 	}
 

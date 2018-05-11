@@ -220,7 +220,7 @@ func MakeBFSNetwork(sv *Server) *BFSNetwork {
 	n := &BFSNetwork{}
 
 	n.sv = sv
-	n.net = sv.initialPeers
+	n.net = sv.network
 
 	n.findRandomPeers(0)
 

@@ -1,7 +1,12 @@
 package dreddit
 
+
+/*
+
 import "math/rand"
 import "time"
+
+
 
 var NUM_PEERS int
 var LOG_NUM_LAYERS int
@@ -13,6 +18,16 @@ LOG_NUM_LAYERS = 8
 RANDOM_WALK_LENGTH = 10
 NUM_DOWNLOADS = 4
 GOSSIP_SIZE = 10
+
+type dshOptions struct {
+	initialPeers []int
+	initialStorage []int
+	isStorage bool
+	M byte
+	initialStoragePeerSame []int
+	initialStoragePeerAbove []int
+	initialStoragePeerBelow []int
+}
 
 func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
@@ -523,30 +538,29 @@ type DredditNode struct {
 	storage_peers_below [NUM_PEERS]int
 	M                   byte
 	network             []*labrpc.ClientEnd
-	isStorage			bool
+	isStorage	    bool
 	Seeds               []HashTriple
 }
 
 
-func MakeDredditNode(sv *Server) *DredditNode {
+func MakeDredditNode(sv *Server, o dshOptions) *DredditNode {
 	dn := &DredditNode{}
 	dn.sv = sv
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 	dn.me = sv.me
 
-
-	dn.peers = sv.initialPeers
-	dn.storage = sv.initialStorage
+	dn.peers = o.initialPeers
+	dn.storage = o.initialStorage
 	dn.network = sv.network
-	dn.isStorage = sv.isStorage
+	dn.isStorage = o.isStorage
 	dn.FullGossip()
 
-	if sv.isStorage{
-		dn.M = sv.M
-		dn.storage_peers_below = sv.initialStoragePeerBelow
-		dn.storage_peers_above = sv.initialStoragePeerAbove
-		dn.storage_peers_same = sv.initialStoragePeerSame
+	if o.isStorage {
+		dn.M = o.M
+		dn.storage_peers_below = o.initialStoragePeerBelow
+		dn.storage_peers_above = o.initialStoragePeerAbove
+		dn.storage_peers_same = o.initialStoragePeerSame
 	}
 }
 
@@ -558,3 +572,5 @@ func (dn *DredditNode) StartDredditNode(){
 		go StoragePeerRefresh()
 	}
 }
+
+*/

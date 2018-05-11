@@ -145,7 +145,7 @@ func MakeBroadcastNetwork(sv *Server) *BroadcastNetwork {
 	n := &BroadcastNetwork{}
 
 	n.sv = sv
-	n.peers = sv.initialPeers
+	n.peers = sv.network
 	if n.sv.me >= 0 {
 		n.me = n.peers[n.sv.me]
 	}
