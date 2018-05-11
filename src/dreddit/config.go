@@ -26,7 +26,7 @@ type config struct {
 	
 }
 
-func make_config(n int) *config {
+func make_config(n int, o interface{}) *config {
 	cfg := &config{}
 	cfg.n = n
 	cfg.net = labrpc.MakeNetwork()
@@ -36,7 +36,12 @@ func make_config(n int) *config {
 
 	// create a full set of servers.
 	for i := 0; i < cfg.n; i++ {
-		cfg.start1(i)
+		// o should either be nil, or a slice of size n of options.
+		if o == nil {
+			cfg.start1(i, nil)
+		} else {
+			cfg.start1(i, o.([]dshOptions)[i])
+		}
 	}
 
 	// connect everyone.
@@ -52,7 +57,7 @@ func (cfg *config) crash1(i int) {
 	cfg.net.DeleteServer(i)
 }
 
-func (cfg *config) start1(i int) {
+func (cfg *config) start1(i int, o interface{}) {
 	cfg.crash1(i)
 
 	// a fresh set of outgoing ClientEnd names.
@@ -69,7 +74,7 @@ func (cfg *config) start1(i int) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
-	sv := MakeServer(ends, i, nil)
+	sv := MakeServer(ends, i, o)
 	cfg.servers[i] = sv
 
 	svc := labrpc.MakeService(sv.net)

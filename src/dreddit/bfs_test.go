@@ -19,10 +19,10 @@ func TestSignMessage(t *testing.T) {
 	fmt.Println("Output post:", dp)
 }
 
-func TestNetworkSimple(t *testing.T) {
-	fmt.Println("\nStarting TestNetworkSimple...")
+func TestBFSNetworkSimple(t *testing.T) {
+	fmt.Println("\nStarting TestBFSNetworkSimple...")
 	
-	cfg := make_config(2)
+	cfg := make_config(2, nil)
 	defer cfg.cleanup()
 
  	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
@@ -36,11 +36,11 @@ func TestNetworkSimple(t *testing.T) {
 	fmt.Println("Output post:", dp)
 }
 
-func TestNetworkConcurrentNewPosts(t *testing.T) {
-	fmt.Println("\nStarting TestNetworkConcurrentNewPosts...")
+func TestBFSNetworkConcurrentNewPosts(t *testing.T) {
+	fmt.Println("\nStarting TestBFSNetworkConcurrentNewPosts...")
 
 	n := 25
-	cfg := make_config(n)
+	cfg := make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -71,14 +71,14 @@ func TestNetworkConcurrentNewPosts(t *testing.T) {
 	}
 }
 
-func TestNetworkDisconnect(t *testing.T) {
+func TestBFSNetworkDisconnect(t *testing.T) {
 	// This test only makes sure posts are reachable. It does not check seeds.
 
-	fmt.Println("\nStarting TestNetworkDisconnect...")
+	fmt.Println("\nStarting TestBFSNetworkDisconnect...")
 
 	n := 25
 	s := 15
-	cfg := make_config(n)
+	cfg := make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -120,14 +120,14 @@ func TestNetworkDisconnect(t *testing.T) {
 	}
 }
 
-func TestDeletePosts(t *testing.T) {
+func TestBFSDeletePosts(t *testing.T) {
 	// This test empties the post cache on some servers, then checks for reachability.
 	
-	fmt.Println("\nStarting TestDeletePosts...")
+	fmt.Println("\nStarting TestBFSDeletePosts...")
 
 	n := 25
 	s := 10
-	cfg := make_config(n)
+	cfg := make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
