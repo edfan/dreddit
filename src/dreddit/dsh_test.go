@@ -22,46 +22,55 @@ func TestDSH(t *testing.T) {
 	perLayer := 4
 	layers := n / perLayer
 	var dshConfig []dshOptions
+	var r int
 
 	for i := 0; i < n; i++ {
 		var o dshOptions
 		layer := i / perLayer
 
 		// Choose random peers.
+		o.initialPeers = make(map[int]int)
 		for j := 0; j < 4; j++ {
-			r := rand.Intn(n)
+			r = rand.Intn(n)
 			for r == i {
 				r = rand.Intn(n)
 			}
-			o.initialPeers = append(o.initialPeers, r)
+			//o.initialPeers = append(o.initialPeers, r)
+			o.initialPeers[r] = 0
 		}
 
 		// Choose random storage peers (one per layer).
+		o.initialStorage = make(map[int]int)
 		for j := 0; j < layers; j++ {
 			r := rand.Intn(perLayer) + j * perLayer
 			for r == i {
 				r = rand.Intn(perLayer) + j * perLayer
 			}
-			o.initialStorage = append(o.initialStorage, r)
+			//o.initialStorage = append(o.initialStorage, r)
+			o.initialStorage[j] = r
 		}
 
 		o.isStorage = true
 		o.M = byte(layer)
 
 		// Choose random storage peer from layer below.
-		r := rand.Intn(perLayer) + perLayer * mod(layer - 1, layers)
-		o.initialStoragePeerBelow = append(o.initialStoragePeerBelow, r)
+		//r := rand.Intn(perLayer) + perLayer * mod(layer - 1, layers)
+		//o.initialStoragePeerBelow = append(o.initialStoragePeerBelow, r)
 
 		// Choose random storage peer from same layer.
+		o.initialStoragePeerSame = make(map[int]int)
 		r = rand.Intn(perLayer) + perLayer * layer
 		for r == i {
 			r = rand.Intn(perLayer) + perLayer * layer
 		}
-		o.initialStoragePeerSame = append(o.initialStoragePeerSame, r)
+		//o.initialStoragePeerSame = append(o.initialStoragePeerSame, r)
+		o.initialStoragePeerSame[r] = 0 
 
 		// Choose random storage peer from layer below.
+		o.initialStoragePeerAbove = make(map[int]int)
 		r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
-		o.initialStoragePeerAbove = append(o.initialStoragePeerAbove, r)
+		//o.initialStoragePeerAbove = append(o.initialStoragePeerAbove, r)
+		o.initialStoragePeerAbove[r] = 0 
 
 		dshConfig = append(dshConfig, o)
 	}

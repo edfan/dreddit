@@ -13,7 +13,6 @@ const(
 	GOSSIP_SIZE = 10
 )
 
-*/
 
 type dshOptions struct {
 	initialPeers []int
@@ -25,7 +24,6 @@ type dshOptions struct {
 	initialStoragePeerBelow []int
 }
 
-/*
 
 func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
