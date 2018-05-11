@@ -54,7 +54,7 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	nodeM := int(sp.Seed.ParentHash[0] >> (8-LOG_NUM_LAYERS))
+	nodeM := int(sp.Seed.Hash[0] >> (8-LOG_NUM_LAYERS))
 
 	ok, current_node := dn.FindStorageLayer(nodeM)
 	if !ok{
@@ -120,7 +120,7 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	nodeM := int(sd.ParentHash[0] >> (8-LOG_NUM_LAYERS))
+	nodeM := int(sd.Hash[0] >> (8-LOG_NUM_LAYERS))
 
 	ok, current_node := dn.FindStorageLayer(nodeM)
 
