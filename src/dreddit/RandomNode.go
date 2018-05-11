@@ -15,12 +15,14 @@ type GetRandomResponse struct{
 
 func GetRandomKey(m map[int]int) (int){
 	chosen_index := rand.Intn(len(m))
-	for k := range m{
+	var k int
+	for k = range m{
 		if chosen_index == 0{
 			return k
 		}
 		chosen_index--
 	}
+	return k
 }
 
 func (dn *DredditNode) SendGetRandom(network []*labrpc.ClientEnd, server int, args *GetRandomArgs, reply *GetRandomResponse) (bool){
@@ -35,7 +37,6 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 
 	var chosen_peer int
 	for true{
-		chosen_peer_index := rand.Intn(NUM_PEERS)
 		if args.T == 0{
 			chosen_peer = GetRandomKey(dn.peers)
 		}

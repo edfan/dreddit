@@ -4,6 +4,7 @@ import "labrpc"
 const(
 	MAX_STORAGE_PEERS = 8
 	LOG_NUM_LAYERS = 2
+	NUM_LAYERS = 4
 	GOSSIP_SIZE = 100
 )
 
@@ -42,7 +43,7 @@ func (dn *DredditNode) PleaseDownload(args *PleaseDownloadArgs, resp *PleaseDown
 	resp.Success = true
 }
 
-func SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp) (bool){
+func (dn *DredditNode) SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp) (bool){
 	ok := network[server].Call("DredditNode.PleaseDownload", args, reply)
 	return ok
 }
@@ -61,14 +62,14 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 	}
 
 	a := -1
-	ok , r := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
+	r, ok := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
 	if ok{
 		a = r
 	}
 
 	args := PleaseDownloadArgs{Post: sp, Seed: sp.Seed, SuggestAbove: a}
 	var resp PleaseDownloadResp
-	ok := dn.SendPleaseDownload(dn.network, current_node, &args, &resp)
+	ok = dn.SendPleaseDownload(dn.network, current_node, &args, &resp)
 
 	if ok{
 		return true
@@ -108,7 +109,7 @@ func (dn *DredditNode) PleaseSend(args *PleaseSendArgs, resp *PleaseSendResp){
 	}
 }
 
-func SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp) (bool){
+func (dn *DredditNode) SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp) (bool){
 	ok := network[server].Call("DredditNode.PleaseSend", args, reply)
 	return ok
 }
@@ -130,7 +131,7 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 	}
 
 	a := -1
-	ok, r := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
+	r, ok := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
 	if ok{
 		a = r
 	}
@@ -147,6 +148,9 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 	if resp.Success{
 			return_post = resp.Post
 			return return_post, true
+	}else{
+		delete(dn.storage, nodeM)
+		return return_post, false
 	}
 }
 
@@ -157,14 +161,14 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 
 func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 
-	ok, node := storage[M]
+	node, ok := dn.storage[M]
 	if ok{
 		return true, node
 	}
 
-	ok, node = storage[(M+1)%NUM_LAYERS]
+	node, ok = dn.storage[(M+1)%NUM_LAYERS]
 	if !ok{
-		ok, node = FindStorageLayer((M+1)%NUM_LAYERS)
+		ok, node = dn.FindStorageLayer((M+1)%NUM_LAYERS)
 		if !ok{
 			return false, node
 		}
@@ -177,7 +181,7 @@ func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 		delete(dn.storage, (M+1)%NUM_LAYERS)
 		return false, node
 	}else{
-		storage[M] = resp.Node
+		dn.storage[M] = resp.Node
 		return true, resp.Node
 	}
 }

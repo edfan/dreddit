@@ -58,10 +58,12 @@ func (dn *DredditNode) BackgroundGossip(){
 		dn.sv.mu.Lock()
 		chosen_peer := GetRandomKey(dn.peers)
 
+		var args GossipArgs
+
 		if GOSSIP_SIZE <= len(dn.Seeds){
-			args := GossipArgs{Seeds: dn.Seeds[len(dn.Seeds) - GOSSIP_SIZE:], FullReply: false, Sender: dn.me}
+			args = GossipArgs{Seeds: dn.Seeds[len(dn.Seeds) - GOSSIP_SIZE:], FullReply: false, Sender: dn.me}
 		}else{
-			args := GossipArgs{Seeds: dn.Seeds[:], FullReply: false, Sender: dn.me}
+			args = GossipArgs{Seeds: dn.Seeds[:], FullReply: false, Sender: dn.me}
 		}
 		var resp GossipResp
 
@@ -86,6 +88,22 @@ func (dn *DredditNode) BackgroundGossip(){
 
 		dn.sv.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (dn *DredditNode) FullGossip(){
+
+	args := GossipArgs{Seeds: nil, FullReply: true}
+	var resp GossipResp
+
+	for true{
+		chosen_peer := GetRandomKey(dn.peers)
+
+		ok := dn.SendGossipHandling(dn.network, chosen_peer, &args, &resp)
+		if ok{
+			dn.Seeds = resp.Seeds
+			break
+		}
 	}
 }
 

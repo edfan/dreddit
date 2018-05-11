@@ -4,20 +4,18 @@ import "time"
 
 
 type PostGossipArgs struct{
-	PostsList []Posts
+	Posts []SignedPost
 	Sender int
 }
 
 type PostGossipResp struct{
 	Success bool
-	PostsList []Posts
+	Posts []SignedPost
 }
 
-func (dn *DredditNode) PostGossipHandling(args *GossipArgs, resp *GossipResp){
+func (dn *DredditNode) PostGossipHandling(args *PostGossipArgs, resp *PostGossipResp){
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
-
-	var add bool
 
 	if len(dn.storage_peers_same) > MAX_STORAGE_PEERS{
 		resp.Success = false
@@ -33,7 +31,7 @@ func (dn *DredditNode) PostGossipHandling(args *GossipArgs, resp *GossipResp){
 	}
 
 	for i := range args.Posts{
-		ok, _ := dn.sv.Posts[args.Posts[i].Seed]
+		_, ok := dn.sv.Posts[args.Posts[i].Seed]
 		if !ok{
 			dn.sv.Posts[args.Posts[i].Seed] = args.Posts[i]
 		}
@@ -52,10 +50,12 @@ func (dn *DredditNode) BackgroundPostGossip(){
 		dn.sv.mu.Lock()
 		chosen_peer := GetRandomKey(dn.peers)
 
+		var args PostGossipArgs
+
 		if GOSSIP_SIZE <= len(dn.Seeds){
-			args := GossipArgs{PostGossipArgs: dn.Posts[len(dn.Seeds) - GOSSIP_SIZE:], Sender: dn.me}
+			args = PostGossipArgs{Posts: dn.Posts[len(dn.Seeds) - GOSSIP_SIZE:], Sender: dn.me}
 		}else{
-			args := GossipArgs{PostGossipArgs: dn.Seeds[:], Sender: dn.me}
+			args = PostGossipArgs{Posts: dn.Posts[:], Sender: dn.me}
 		}
 		var resp PostGossipResp
 
@@ -63,7 +63,7 @@ func (dn *DredditNode) BackgroundPostGossip(){
 
 		if ok{
 			for i := range resp.Posts{
-				ok2, _ := dn.sv.Posts[resp.Posts[i].Seed]
+				_, ok2 := dn.sv.Posts[resp.Posts[i].Seed]
 				if !ok2{
 					dn.sv.Posts[resp.Posts[i].Seed] = resp.Posts[i]
 				}

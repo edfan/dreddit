@@ -1,5 +1,6 @@
-//package dreddit
+package dreddit
 
+/*
 import "math/rand"
 import "time"
 import "labrpc"
@@ -573,3 +574,4 @@ func (dn *DredditNode) StartDredditNode(){
 		go dn.StoragePeerRefresh()
 	}
 }
+*/
