@@ -26,7 +26,7 @@ type Config struct {
 	
 }
 
-func Make_config(n int, o interface{}) *Config {
+func Make_config(n int, b Backend, o interface{}) *Config {
 	cfg := &Config{}
 	cfg.n = n
 	cfg.net = labrpc.MakeNetwork()
@@ -38,9 +38,10 @@ func Make_config(n int, o interface{}) *Config {
 	for i := 0; i < cfg.n; i++ {
 		// o should either be nil, or a slice of size n of options.
 		if o == nil {
-			cfg.start1(i, nil)
+			cfg.start1(i, b, nil)
 		} else {
-			cfg.start1(i, o.([]dshOptions)[i])
+			// Note: should rework this to allow options for other backends.
+			cfg.start1(i, b, o.([]dshOptions)[i])
 		}
 	}
 
@@ -57,7 +58,7 @@ func (cfg *Config) crash1(i int) {
 	cfg.net.DeleteServer(i)
 }
 
-func (cfg *Config) start1(i int, o interface{}) {
+func (cfg *Config) start1(i int, b Backend, o interface{}) {
 	cfg.crash1(i)
 
 	// a fresh set of outgoing ClientEnd names.
@@ -74,9 +75,8 @@ func (cfg *Config) start1(i int, o interface{}) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
-	sv := MakeServer(ends, i, o)
+	sv := MakeServer(ends, i, b, o)
 	cfg.Servers[i] = sv
-
 
 	svc := labrpc.MakeService(sv.net)
 	srv := labrpc.MakeServer()

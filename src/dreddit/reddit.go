@@ -13,6 +13,14 @@ import (
 //	"github.com/rs/xid"
 )
 
+type Backend int
+
+const (
+	Broadcast Backend = iota
+	BFS
+	DHT
+)
+
 type Post struct {
 	Username  string
 	Title     string
@@ -148,7 +156,7 @@ func (sv *Server) GetPost(seed HashTriple) (SignedPost, bool) {
 	}
 }
 
-func MakeServer(network []*labrpc.ClientEnd, me int, options interface{}) *Server {
+func MakeServer(network []*labrpc.ClientEnd, me int, backend Backend, options interface{}) *Server {
 	sv := &Server{}
 	// sv.id = xid.New().String()
 
@@ -165,7 +173,14 @@ func MakeServer(network []*labrpc.ClientEnd, me int, options interface{}) *Serve
 	sv.PostsCh = make(chan SignedPost, 100)
 
 	// Change this to change the network type.
-        // sv.net = MakeBroadcastNetwork(sv)
-	sv.net = MakeDredditNode(sv, options.(dshOptions))
+	switch backend {
+	case Broadcast:
+		sv.net = MakeBroadcastNetwork(sv)
+	case BFS:
+		sv.net = MakeBFSNetwork(sv)
+	case DHT:
+		sv.net = MakeDredditNode(sv, options.(dshOptions))
+	}
+	
 	return sv
 }

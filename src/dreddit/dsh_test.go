@@ -15,8 +15,8 @@ func mod(d, m int) int {
 	return res
 }
 
-func TestDSH(t *testing.T) {
-	fmt.Println("Starting TestDSH...")
+func TestDHT(t *testing.T) {
+	fmt.Println("\nStarting TestDHT...")
 
 	n := 64	
 	perLayer := 16
@@ -88,7 +88,7 @@ func TestDSH(t *testing.T) {
 		dshConfig = append(dshConfig, o)
 	}
 
-	cfg := Make_config(n, dshConfig)
+	cfg := Make_config(n, DHT, dshConfig)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -106,7 +106,7 @@ func TestDSH(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
-			fmt.Printf("Server %d looking for post from %d\n", i, j)
+//			fmt.Printf("Server %d looking for post from %d\n", i, j)
 			op, found := cfg.Servers[i].GetPost(hashes[j])
 			for !found{
 				op, found = cfg.Servers[i].GetPost(hashes[j])
@@ -120,10 +120,12 @@ func TestDSH(t *testing.T) {
 			}
 		}
 	}
+
+	printPassed(t)
 }
 
-func TestDSHMissingHalfLayers(t *testing.T) {
-	fmt.Println("Starting TestDSH...")
+func TestDHTMissingHalfLayers(t *testing.T) {
+	fmt.Println("\nStarting TestDHTMissingHalfLayers...")
 
 	n := 64	
 	perLayer := 16
@@ -198,7 +200,7 @@ func TestDSHMissingHalfLayers(t *testing.T) {
 		dshConfig = append(dshConfig, o)
 	}
 
-	cfg := make_config(n, dshConfig)
+	cfg := Make_config(n, DHT, dshConfig)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -206,7 +208,7 @@ func TestDSHMissingHalfLayers(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p).Seed
+			hashes[i] = cfg.Servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -216,20 +218,22 @@ func TestDSHMissingHalfLayers(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
-			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, found := cfg.servers[i].GetPost(hashes[j])
+//			fmt.Printf("Server %d looking for post from %d\n", i, j)
+			op, found := cfg.Servers[i].GetPost(hashes[j])
 			for !found{
-				op, found = cfg.servers[i].GetPost(hashes[j])
+				op, found = cfg.Servers[i].GetPost(hashes[j])
 			}
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
-				fmt.Printf("Server %d has post from %d\n", i, j)
+//				fmt.Printf("Server %d has post from %d\n", i, j)
 			} else {
 				fmt.Printf("Server %d missing post from %d, post received %v\n", i, j, p)
 				t.Fail()
 			}
 		}
 	}
+
+	printPassed(t)
 }
 
 
