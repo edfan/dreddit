@@ -1,25 +1,18 @@
 package dreddit
 
-
 /*
-
 import "math/rand"
 import "time"
+import "labrpc"
 
+const(
+	NUM_PEERS = 8
+	LOG_NUM_LAYERS = 8
+	RANDOM_WALK_LENGTH = 10
+	NUM_DOWNLOADS = 4
+	GOSSIP_SIZE = 10
+)
 
-
-var NUM_PEERS int
-var LOG_NUM_LAYERS int
-var RANDOM_WALK_LENGTH int
-var NUM_DOWNLOADS int
-
-NUM_PEERS = 8
-LOG_NUM_LAYERS = 8
-RANDOM_WALK_LENGTH = 10
-NUM_DOWNLOADS = 4
-GOSSIP_SIZE = 10
-
-*/
 
 type dshOptions struct {
 	initialPeers []int
@@ -31,14 +24,13 @@ type dshOptions struct {
 	initialStoragePeerBelow []int
 }
 
-/*
 
 func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	nodeM = sp.Seed.ParentHash[0]
+	nodeM := sp.Seed.ParentHash[0]
 
 	ok, current_node := dn.FindStorageLayer(nodeM)
 	if !ok{
@@ -50,18 +42,18 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 	for duplicates <= NUM_DOWNLOADS{
 		args := PleaseDownloadArgs{Post: sp, Seed: sp.Seed}
 		var resp PleaseDownloadResp
-		ok := SendPleaseDownload(dn.network, current_node, args, resp)
+		ok := SendPleaseDownload(dn.network, current_node, &args, &resp)
 		if ok{
 			duplicates += 1
 		}else{
 			return false
 		}
 
-		args := GetRandomWalkArgs{T: 1}
-		var resp GetRandomResponse
-		ok = SendGetRandomWalk(dn.network, current_node, args, resp)
-		if ok{
-			current_node = resp.Node
+		args2 := GetRandomWalkArgs{T: 1}
+		var resp2 GetRandomWalkResponse
+		ok = SendGetRandomWalk(dn.network, current_node, &args2, &resp2)
+		if ok && resp.Success{
+			current_node = resp2.Node
 		}
 	}
 	return true
@@ -83,16 +75,17 @@ func (dn *DredditNode) FindStorageLayer(M byte) (bool, int){
 		}
 	}
 
-	current_layer := dn.storage_index[i]
-	current_node := dn.storage[i]
+	current_layer := dn.storage_index[current_closest]
+	current_node := dn.storage[current_closest]
 	for current_layer != M{
 		var resp GetRandomResponse
+		var args GetRandomArgs
 		if M < current_layer{
-			args := GetRandomArgs{t: 1, Direction: -1}
+			args = GetRandomArgs{T: 1, Direction: -1}
 		}else{
-			args := GetRandomArgs{t: 1, Direction: 1}
+			args = GetRandomArgs{T: 1, Direction: 1}
 		}
-		ok := SendGetRandom(dn.network, current_node, args, resp)
+		ok := SendGetRandom(dn.network, current_node, &args, &resp)
 		if !ok{
 			return false, current_node
 		}
@@ -102,26 +95,26 @@ func (dn *DredditNode) FindStorageLayer(M byte) (bool, int){
 	return true, current_node
 }
 
-func (dn *DredditNode) GetPost(sd Seed) (SignedPost, bool) {
+func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 
 	// FindStorageLayer on ParentHash
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	nodeM = sd.ParentHash[0]
+	nodeM := sd.ParentHash[0]
 
 	ok, current_node := dn.FindStorageLayer(nodeM)
 
-	var return_post []SignedPost
+	var return_post SignedPost
 	
 	if !ok{
 		return return_post, false
 	}
 
 	for true{
-		args := PleaseSendArgs{Seed: sd[i]}
+		args := PleaseSendArgs{Seed: sd}
 		var resp PleaseSendResp 
-		ok = SendPleaseSend(dn.network, current_node, args, resp)
+		ok = SendPleaseSend(dn.network, current_node, &args, &resp)
 
 		if !ok{
 			return return_post, false
@@ -131,18 +124,19 @@ func (dn *DredditNode) GetPost(sd Seed) (SignedPost, bool) {
 			return_post = resp.Post
 			chosen_peer_index := rand.Intn(NUM_PEERS)
 			dn.storage[chosen_peer_index] = current_node
-			return return_posts, true
+			dn.storage_index[chosen_peer_index] = nodeM
+			return return_post, true
 		}else{
 			args := GetRandomWalkArgs{T: 1}
-			var resp GetRandomResponse
-			ok = SendGetRandomWalk(dn.network, current_node, args, resp)
-			if ok{
+			var resp GetRandomWalkResponse
+			ok = SendGetRandomWalk(dn.network, current_node, &args, &resp)
+			if ok && resp.Success{
 				current_node = resp.Node
 			}
 		}
 	}
 
-	return return_posts, true
+	return return_post, true
 }
 
 
@@ -155,12 +149,13 @@ func (dn *DredditNode) BackgroundGossip(){
 		args := GossipArgs{Seeds: dn.Seeds[len(dn.Seeds) - GOSSIP_SIZE:], FullReply: false}
 		var resp GossipResp
 
-		ok := SendGossipHandling(dn.network, chosen_peer, args, resp)
+		ok := SendGossipHandling(dn.network, chosen_peer, &args, &resp)
 
+		var add bool
 		if ok{
-			for i := resp.Seeds{
+			for i := range resp.Seeds{
 				add = true
-				for j := dn.Seeds{
+				for j := range dn.Seeds{
 					if resp.Seeds[i] == dn.Seeds[j]{
 						add = false
 					}
@@ -180,14 +175,14 @@ func (dn *DredditNode) BackgroundGossip(){
 // doesn't need locks because, again, called by other functions, or before any other functions are running
 func (dn *DredditNode) FullGossip(){
 
-	args := GossipArgs{Seeds: make([]HashTriple), FullReply: true}
+	args := GossipArgs{Seeds: nil, FullReply: true}
 	var resp GossipResp
 
 	for true{
 		chosen_peer_index := rand.Intn(NUM_PEERS)
 		chosen_peer := dn.peers[chosen_peer_index]
 
-		ok := SendGossipHandling(dn.network, chosen_peer, args, resp)
+		ok := SendGossipHandling(dn.network, chosen_peer, &args, &resp)
 		if ok{
 			dn.Seeds = resp.Seeds
 			break
@@ -206,7 +201,7 @@ type GossipResp struct{
 	Seeds []HashTriple
 }
 
-func (dn *DredditNode) GossipHandling(args GossipArgs, resp GossipResp){
+func (dn *DredditNode) GossipHandling(args *GossipArgs, resp *GossipResp){
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
@@ -218,9 +213,9 @@ func (dn *DredditNode) GossipHandling(args GossipArgs, resp GossipResp){
 		resp.Seeds = dn.Seeds[len(dn.Seeds) - GOSSIP_SIZE:]
 	}
 
-	for i := args.Seeds{
+	for i := range args.Seeds{
 		add = true
-		for j := dn.Seeds{
+		for j := range dn.Seeds{
 			if args.Seeds[i] == dn.Seeds[j]{
 				add = false
 			}
@@ -233,12 +228,12 @@ func (dn *DredditNode) GossipHandling(args GossipArgs, resp GossipResp){
 	resp.Success = true
 }
 
-func SendGossipHandling(network []*labrpc.ClientEnd, server int, args *GossipArgs, reply *GossipResp){
+func SendGossipHandling(network []*labrpc.ClientEnd, server int, args *GossipArgs, reply *GossipResp) (bool){
 	ok := network[server].Call("DredditNode.GossipHandling", args, reply)
 	return ok
 }
 
-func PeerRefresh(){ // We might not implement or use this
+func (dn *DredditNode) PeerRefresh(){ // We might not implement or use this
 	// Refresh your peers that haven't updated recently, or no longer respond
 	var ok bool
 	for true{
@@ -269,7 +264,7 @@ func (dn *DredditNode) BackgroundDownload(){
 
 		for i := range dn.Seeds{
 			sd := dn.Seeds[len(dn.Seeds) - i - 1]
-			if M != sd.Hash[0]{
+			if dn.M != sd.Hash[0]{
 				continue
 			}
 			_, ok := dn.sv.Posts[sd]
@@ -279,7 +274,7 @@ func (dn *DredditNode) BackgroundDownload(){
 				for true{
 					chosen_peer_index := rand.Intn(NUM_PEERS)
 					chosen_peer := dn.storage[chosen_peer_index]
-					ok2 := SendPleaseSend(dn.network, chosen_peer, args, resp)
+					ok2 := SendPleaseSend(dn.network, chosen_peer, &args, &resp)
 					if ok2{
 						dn.sv.Posts[sd] = resp.Post
 						break
@@ -309,7 +304,7 @@ type PleaseSendResp struct{
 	Post SignedPost
 }
 
-func (dn *DredditNode) PleaseSend(args PleaseSendArgs, resp PleaseSendResp){
+func (dn *DredditNode) PleaseSend(args *PleaseSendArgs, resp *PleaseSendResp){
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
@@ -322,28 +317,29 @@ func (dn *DredditNode) PleaseSend(args PleaseSendArgs, resp PleaseSendResp){
 	}
 }
 
-func SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp){
+func SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp) (bool){
 	ok := network[server].Call("DredditNode.PleaseSend", args, reply)
 	return ok
 }
 
 // We might not have implement or use this
 
-func StoragePeerRefresh{
+func (dn *DredditNode) StoragePeerRefresh(){
 	// Refresh your storage peers that haven't been useful recently, or no longer respond
 	var ok bool
 	for true{
 		dn.sv.mu.Lock()
 		chosen_peer_index := rand.Intn(NUM_PEERS)
 		chosen_peer_index_type := rand.Intn(3)
+		var chosen_peer int
 		if chosen_peer_index_type == 0{
-			chosen_peer := dn.storage_peers_same[chosen_peer_index]
+			chosen_peer = dn.storage_peers_same[chosen_peer_index]
 		}
 		if chosen_peer_index_type == 1{
-			chosen_peer := dn.storage_peers_above[chosen_peer_index]
+			chosen_peer = dn.storage_peers_above[chosen_peer_index]
 		}
 		if chosen_peer_index_type == 2{
-			chosen_peer := dn.storage_peers_below[chosen_peer_index]
+			chosen_peer = dn.storage_peers_below[chosen_peer_index]
 		}
 		ok = SendPing(dn.network, chosen_peer)
 		if !ok{
@@ -358,8 +354,8 @@ func StoragePeerRefresh{
 				start_peer := dn.storage_peers_above[another_chosen_peer_index]
 				args := GetRandomWalkArgs{T: 1}
 				var resp GetRandomWalkResponse
-				ok2 := SendGetRandomWalk(dn.network, start_peer, args, resp)
-				if ok2{
+				ok2 := SendGetRandomWalk(dn.network, start_peer, &args, &resp)
+				if ok2 && resp.Success{
 					dn.storage_peers_above[chosen_peer_index] = resp.Node
 				}
 			}
@@ -368,8 +364,8 @@ func StoragePeerRefresh{
 				start_peer := dn.storage_peers_below[another_chosen_peer_index]
 				args := GetRandomWalkArgs{T: 1}
 				var resp GetRandomWalkResponse
-				ok2 := SendGetRandomWalk(dn.network, start_peer, args, resp)
-				if ok2{
+				ok2 := SendGetRandomWalk(dn.network, start_peer, &args, &resp)
+				if ok2 && resp.Success{
 					dn.storage_peers_below[chosen_peer_index] = resp.Node
 				}
 			}
@@ -392,17 +388,17 @@ type PleaseDownloadResp struct{
 	Success bool
 }
 
-func (dn *DredditNode) PleaseDownload(args PleaseDownloadArgs, resp PleaseDownloadResp){
+func (dn *DredditNode) PleaseDownload(args *PleaseDownloadArgs, resp *PleaseDownloadResp){
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	dn.sv.Posts[args.Seed] = args.Posts
+	dn.sv.Posts[args.Seed] = args.Post
 	dn.Seeds = append(dn.Seeds, args.Seed)
 
 	resp.Success = true
 }
 
-func SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp){
+func SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp) (bool){
 	ok := network[server].Call("DredditNode.PleaseDownload", args, reply)
 	return ok
 }
@@ -415,14 +411,15 @@ func (dn *DredditNode) RandomWalk(t int) (bool, int){// t = 0 random peer, t = 1
 	var resp GetRandomResponse
 
 	ok := false
+	var chosen_peer int
 
 	for !ok{
 		chosen_peer_index := rand.Intn(NUM_PEERS)
 		if t == 0{
-			chosen_peer := dn.peers[chosen_peer_index]
+			chosen_peer = dn.peers[chosen_peer_index]
 		}
 		if t == 1{
-			chosen_peer := dn.storage_peers_same[chosen_peer_index]
+			chosen_peer = dn.storage_peers_same[chosen_peer_index]
 		}
 		ok = SendPing(dn.network, chosen_peer)
 	}
@@ -430,7 +427,7 @@ func (dn *DredditNode) RandomWalk(t int) (bool, int){// t = 0 random peer, t = 1
 	counter := 0
 
 	for counter < RANDOM_WALK_LENGTH{
-		ok = SendGetRandom(dn.network, chosen_peer, args, resp)
+		ok = SendGetRandom(dn.network, chosen_peer, &args, &resp)
 		if !ok{
 			return false, dn.peers[0]
 		}
@@ -453,7 +450,7 @@ type GetRandomResponse struct{
 	NodeM byte
 }
 
-func SendGetRandom(network []*labrpc.ClientEnd, server int, args *GetRandomArgs, reply *GetRandomResponse){
+func SendGetRandom(network []*labrpc.ClientEnd, server int, args *GetRandomArgs, reply *GetRandomResponse) (bool){
 	ok := network[server].Call("DredditNode.GetRandom", args, reply)
 	return ok
 }
@@ -463,24 +460,25 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
+	var chosen_peer int
 	for true{
 		chosen_peer_index := rand.Intn(NUM_PEERS)
-		if args.Type == 0{
-			chosen_peer := dn.peers[chosen_peer_index]
+		if args.T == 0{
+			chosen_peer = dn.peers[chosen_peer_index]
 		}
-		if args.Type == 1{
+		if args.T == 1{
 			if args.Direction == 0{
-			chosen_peer := dn.storage_peers_same[chosen_peer_index]
+			chosen_peer = dn.storage_peers_same[chosen_peer_index]
 			}
 			if args.Direction == 1{
-				chosen_peer := dn.storage_peers_above[chosen_peer_index]
+				chosen_peer = dn.storage_peers_above[chosen_peer_index]
 			}
 			if args.Direction == -1{
-				chosen_peer := dn.storage_peers_below[chosen_peer_index]
+				chosen_peer = dn.storage_peers_below[chosen_peer_index]
 			}
 		}
-		if args.Type == 2{
-			chosen_peer := dn.storage[chosen_peer_index]
+		if args.T == 2{
+			chosen_peer = dn.storage[chosen_peer_index]
 		}
 		
 		ok := SendPing(dn.network, chosen_peer)
@@ -495,12 +493,12 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 
 // Pinging another server to verify its existence
 
-func HandlePing(){
+func HandlePing(args, reply int){
 	return
 }
 
-func SendPing(network []*labrpc.ClientEnd, server int){
-	ok := network[server].Call("DredditNode.HandlePing")
+func SendPing(network []*labrpc.ClientEnd, server int) (bool){
+	ok := network[server].Call("DredditNode.HandlePing", 0, 0)
 	return ok
 }
 
@@ -512,9 +510,10 @@ type GetRandomWalkArgs struct{
 
 type GetRandomWalkResponse struct{
 	Node int
+	Success bool
 }
 
-func SendGetRandomWalk(network []*labrpc.ClientEnd, server int, args *GetRandomWalkArgs, reply *GetRandomWalkResponse){
+func SendGetRandomWalk(network []*labrpc.ClientEnd, server int, args *GetRandomWalkArgs, reply *GetRandomWalkResponse)(bool){
 	ok := network[server].Call("DredditNode.GetRandomWalk", args, reply)
 	return ok
 }
@@ -523,23 +522,23 @@ func (dn *DredditNode) GetRandomWalk(args *GetRandomWalkArgs, resp *GetRandomWal
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	if args.Type == 0{
-		resp.Node = dn.RandomWalk(0)
+	if args.T == 0{
+		resp.Success, resp.Node = dn.RandomWalk(0)
 	}
-	if args.Type == 1{
-		resp.Node = dn.RandomWalk(1)
+	if args.T == 1{
+		resp.Success, resp.Node = dn.RandomWalk(1)
 	}
 }
 
 type DredditNode struct {
 	sv                  *Server
 	me                  int
-	peers               [NUM_PEERS]int
-	storage             [NUM_PEERS]int
-	storage_index       [NUM_PEERS]byte
-	storage_peers_same  [NUM_PEERS]int
-	storage_peers_above [NUM_PEERS]int
-	storage_peers_below [NUM_PEERS]int
+	peers               []int
+	storage             []int
+	storage_index       []byte
+	storage_peers_same  []int
+	storage_peers_above []int
+	storage_peers_below []int
 	M                   byte
 	network             []*labrpc.ClientEnd
 	isStorage	    bool
@@ -566,15 +565,15 @@ func MakeDredditNode(sv *Server, o dshOptions) *DredditNode {
 		dn.storage_peers_above = o.initialStoragePeerAbove
 		dn.storage_peers_same = o.initialStoragePeerSame
 	}
+	return dn
 }
 
 func (dn *DredditNode) StartDredditNode(){
-	go BackgroundGossip()
-	go PeerRefresh()
+	go dn.BackgroundGossip()
+	go dn.PeerRefresh()
 	if dn.isStorage{
-		go BackgroundDownload()
-		go StoragePeerRefresh()
+		go dn.BackgroundDownload()
+		go dn.StoragePeerRefresh()
 	}
 }
-
 */
