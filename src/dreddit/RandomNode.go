@@ -1,6 +1,7 @@
 package dreddit
 import "math/rand"
 import "labrpc"
+//import "fmt"
 
 type GetRandomArgs struct{
 	T int //0, 1 - regular peer, storage peer
@@ -9,7 +10,8 @@ type GetRandomArgs struct{
 
 type GetRandomResponse struct{
 	Node int
-	NodeM byte
+	NodeM int
+	Success bool
 }
 
 
@@ -26,6 +28,9 @@ func GetRandomKey(m map[int]int) (int){
 }
 
 func (dn *DredditNode) SendGetRandom(network []*labrpc.ClientEnd, server int, args *GetRandomArgs, reply *GetRandomResponse) (bool){
+	if dn.me == server{
+		return false
+	}
 	ok := network[server].Call("DredditNode.GetRandom", args, reply)
 	return ok
 }
@@ -38,13 +43,25 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 	var chosen_peer int
 	for true{
 		if args.T == 0{
+			if len(dn.peers) == 0{
+				resp.Success = false
+				return
+			}
 			chosen_peer = GetRandomKey(dn.peers)
 		}
 		if args.T == 1{
 			if args.Direction == 0{
+				if len(dn.storage_peers_same) == 0{
+					resp.Success = false
+					return
+				}
 				chosen_peer = GetRandomKey(dn.storage_peers_same)
 			}
 			if args.Direction == 1{
+				if len(dn.storage_peers_above) == 0{
+					resp.Success = false
+					return
+				}
 				chosen_peer = GetRandomKey(dn.storage_peers_above)
 			}
 		}
@@ -54,6 +71,7 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 		if ok{
 			resp.Node = chosen_peer
 			resp.NodeM = dn.M
+			resp.Success = true
 			return
 		}else{
 			if args.T == 0{
@@ -71,11 +89,16 @@ func (dn *DredditNode) GetRandom(args *GetRandomArgs, resp *GetRandomResponse){
 	}
 }
 
-func (dn *DredditNode) HandlePing(args, reply int){
+func (dn *DredditNode) HandlePing(args *GetRandomArgs, reply *GetRandomResponse){
 	return
 }
 
 func (dn *DredditNode) SendPing(network []*labrpc.ClientEnd, server int) (bool){
-	ok := network[server].Call("DredditNode.HandlePing", 0, 0)
+	var args GetRandomArgs
+	var reply GetRandomResponse
+	if dn.me == server{
+		return false
+	}
+	ok := network[server].Call("DredditNode.HandlePing", &args, &reply)
 	return ok
 }

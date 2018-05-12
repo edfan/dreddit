@@ -1,6 +1,8 @@
 package dreddit
 import "labrpc"
 import "time"
+//import "fmt"
+
 
 
 type PostGossipArgs struct{
@@ -41,6 +43,9 @@ func (dn *DredditNode) PostGossipHandling(args *PostGossipArgs, resp *PostGossip
 }
 
 func (dn *DredditNode) SendPostGossipHandling(network []*labrpc.ClientEnd, server int, args *PostGossipArgs, reply *PostGossipResp) (bool){
+	if dn.me == server{
+		return false
+	}
 	ok := network[server].Call("DredditNode.PostGossipHandling", args, reply)
 	return ok
 }
@@ -48,7 +53,12 @@ func (dn *DredditNode) SendPostGossipHandling(network []*labrpc.ClientEnd, serve
 func (dn *DredditNode) BackgroundPostGossip(){
 	for true{
 		dn.sv.mu.Lock()
-		chosen_peer := GetRandomKey(dn.peers)
+		if len(dn.storage_peers_same) == 0{
+			dn.sv.mu.Unlock()
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		chosen_peer := GetRandomKey(dn.storage_peers_same)
 
 		var args PostGossipArgs
 
@@ -59,7 +69,13 @@ func (dn *DredditNode) BackgroundPostGossip(){
 		}
 		var resp PostGossipResp
 
+		dn.sv.mu.Unlock()
+
 		ok := dn.SendPostGossipHandling(dn.network, chosen_peer, &args, &resp)
+
+		time.Sleep(100 * time.Millisecond)
+
+		dn.sv.mu.Lock()
 
 		if ok{
 			for i := range resp.Posts{
@@ -73,7 +89,7 @@ func (dn *DredditNode) BackgroundPostGossip(){
 		}
 
 		dn.sv.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
