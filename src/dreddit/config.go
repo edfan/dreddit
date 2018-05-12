@@ -17,20 +17,20 @@ func randstring(n int) string {
 	return s[0:n]
 }
 	
-type config struct {
+type Config struct {
 	n         int
 	net       *labrpc.Network
-	servers   []*Server
+	Servers   []*Server
 	connected []bool
 	endnames  [][]string
 	
 }
 
-func make_config(n int, o interface{}) *config {
-	cfg := &config{}
+func Make_config(n int, b Backend, o interface{}) *Config {
+	cfg := &Config{}
 	cfg.n = n
 	cfg.net = labrpc.MakeNetwork()
-	cfg.servers = make([]*Server, cfg.n)
+	cfg.Servers = make([]*Server, cfg.n)
 	cfg.connected = make([]bool, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
 
@@ -38,9 +38,10 @@ func make_config(n int, o interface{}) *config {
 	for i := 0; i < cfg.n; i++ {
 		// o should either be nil, or a slice of size n of options.
 		if o == nil {
-			cfg.start1(i, nil)
+			cfg.start1(i, b, nil)
 		} else {
-			cfg.start1(i, o.([]dshOptions)[i])
+			// Note: should rework this to allow options for other backends.
+			cfg.start1(i, b, o.([]dshOptions)[i])
 		}
 	}
 
@@ -52,12 +53,12 @@ func make_config(n int, o interface{}) *config {
 	return cfg
 }
 
-func (cfg *config) crash1(i int) {
+func (cfg *Config) crash1(i int) {
 	cfg.disconnect(i)
 	cfg.net.DeleteServer(i)
 }
 
-func (cfg *config) start1(i int, o interface{}) {
+func (cfg *Config) start1(i int, b Backend, o interface{}) {
 	cfg.crash1(i)
 
 	// a fresh set of outgoing ClientEnd names.
@@ -74,8 +75,8 @@ func (cfg *config) start1(i int, o interface{}) {
 		cfg.net.Connect(cfg.endnames[i][j], j)
 	}
 
-	sv := MakeServer(ends, i, o)
-	cfg.servers[i] = sv
+	sv := MakeServer(ends, i, b, o)
+	cfg.Servers[i] = sv
 
 	svc := labrpc.MakeService(sv.net)
 	srv := labrpc.MakeServer()
@@ -83,7 +84,7 @@ func (cfg *config) start1(i int, o interface{}) {
 	cfg.net.AddServer(i, srv)
 }
 
-func (cfg *config) connect(i int) {
+func (cfg *Config) connect(i int) {
 	// fmt.Printf("connect(%d)\n", i)
 
 	cfg.connected[i] = true
@@ -105,7 +106,7 @@ func (cfg *config) connect(i int) {
 	}
 }
 
-func (cfg *config) disconnect(i int) {
+func (cfg *Config) disconnect(i int) {
 	// fmt.Printf("disconnect(%d)\n", i)
 
 	cfg.connected[i] = false
@@ -127,7 +128,7 @@ func (cfg *config) disconnect(i int) {
 	}
 }
 
-func (cfg *config) cleanup() {
+func (cfg *Config) cleanup() {
 	cfg.net.Cleanup()
 }
 

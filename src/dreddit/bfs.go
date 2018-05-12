@@ -1,11 +1,13 @@
 package dreddit
 
 import (
-	"fmt"
+//	"fmt"
 	"labrpc"
 	"math/rand"
 	"sync"
 )
+
+const NUM_PEERS = 6
 
 func min(x, y int) int {
     if x < y {
@@ -30,6 +32,8 @@ func (n *BFSNetwork) keep(sp SignedPost) bool {
 
 func (n *BFSNetwork) NewPost(sp SignedPost) bool {
 	n.seeds.Store(sp.Seed, n.sv.me)
+
+	// fmt.Println("BFS NewPost called")
 	
 	for i := 0; i < len(n.peers); i++ {
 		go n.makeReceivePost(n.peers[i], sp, n.sv.me)
@@ -48,7 +52,7 @@ func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 	lastStored, ok := n.seeds.Load(hash)
 	for ok {
 		seen[lastStored.(int)] = true
-		fmt.Printf("Server %d asking %d\n", n.sv.me, lastStored)
+		// fmt.Printf("Server %d asking %d\n", n.sv.me, lastStored)
 		args := BFSRequestPostArgs{Hash: hash}
 		var reply BFSRequestPostReply
 		
@@ -56,17 +60,17 @@ func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 		
 		if status {
 			if reply.Success {
-				fmt.Printf("Server %d found post on %d\n", n.sv.me, lastStored)
+				// fmt.Printf("Server %d found post on %d\n", n.sv.me, lastStored)
 				_, ok := verifyPost(reply.Sp, hash)
 				if ok {
 					return reply.Sp, true
 				}
 			} else {
 				if seen[reply.Redirect] {
-					fmt.Printf("Server %d got dead redirect from %d\n", n.sv.me, lastStored)
+					// fmt.Printf("Server %d got dead redirect from %d\n", n.sv.me, lastStored)
 					n.seeds.Delete(hash)
 				} else {
-					fmt.Printf("Server %d got redirect %d from %d\n", n.sv.me, reply.Redirect, lastStored)
+					// fmt.Printf("Server %d got redirect %d from %d\n", n.sv.me, reply.Redirect, lastStored)
 					n.seeds.Store(hash, reply.Redirect)
 				}
 			}
@@ -81,7 +85,7 @@ func (n *BFSNetwork) GetPostRecursive(hash HashTriple) (SignedPost, bool) {
 }
 
 func (n *BFSNetwork) GetPost(hash HashTriple) (SignedPost, bool) {
-	fmt.Printf("Server %d calling GetPost\n", n.sv.me)
+	// fmt.Printf("Server %d calling GetPost\n", n.sv.me)
 	
 	// Try saved peer first.
 	sp, ok := n.GetPostRecursive(hash)
@@ -90,7 +94,7 @@ func (n *BFSNetwork) GetPost(hash HashTriple) (SignedPost, bool) {
 	}
 	
 	// Ask peers for help.
-	fmt.Printf("Server %d asking peers\n", n.sv.me)
+	// fmt.Printf("Server %d asking peers\n", n.sv.me)
 	for i := 0; i < len(n.peers); i++ {
 		n.seeds.Store(hash, n.peers[i])
 
@@ -130,6 +134,8 @@ func (n *BFSNetwork) ReceivePost(args *BFSReceivePostArgs, reply *BFSReceivePost
 				reply.Stored = true
 				args.LastStored = n.sv.me
 			}
+
+			n.sv.PostsCh <- args.Sp
 			
 			reply.Success = true
 		}
@@ -200,20 +206,99 @@ func (n *BFSNetwork) sendRequestPost(server int, args *BFSRequestPostArgs, reply
 	return ok
 }
 
+type BFSSendSeedsArgs struct {
+	Origin   int
+	FullSync bool
+}
+
+type BFSSendSeedsReply struct {
+	Seeds sync.Map
+}
+
+func (n *BFSNetwork) SendSeeds(args *BFSSendSeedsArgs, reply *BFSSendSeedsReply) {
+	// Add as peer.
+	n.peers = append(n.peers, args.Origin)
+	
+	if args.FullSync {
+		reply.Seeds = n.seeds
+	}
+}
+
+func (n *BFSNetwork) sendSendSeeds(server int, args *BFSSendSeedsArgs, reply *BFSSendSeedsReply) bool {
+	ok := n.net[server].Call("BFSNetwork.SendSeeds", args, reply)
+	return ok
+}
+
+func (n *BFSNetwork) setup() {
+	// Set-up function to get seeds from peers (and add them as peers).
+	seedsReady := false
+	
+	for i := 0; i < len(n.peers); i++ {
+		var args BFSSendSeedsArgs
+		if !seedsReady {
+			args.FullSync = true
+		}
+		var reply BFSSendSeedsReply
+		
+		status := n.sendSendSeeds(n.peers[i], &args, &reply)
+
+		if status {
+			if !seedsReady {
+				reply.Seeds.Range(func (seed, server interface{}) bool {
+					_, ok := n.seeds.Load(seed.(HashTriple))
+					if !ok {
+						n.seeds.Store(seed.(HashTriple), server.(int))
+					}
+					return true
+				})
+				seedsReady = true
+
+				
+				go reply.Seeds.Range(func (seed, _ interface{}) bool {
+					sp, ok := n.GetPost(seed.(HashTriple))
+					if ok {
+						if n.keep(sp) {
+							n.sv.mu.Lock()
+							_, ok := n.sv.Posts[sp.Seed]
+							if !ok {
+								n.sv.Posts[sp.Seed] = sp
+							}
+							n.sv.mu.Unlock()
+						}
+
+						n.sv.PostsCh <- sp
+					}
+					return true
+				})
+                                
+			}
+		}
+	}
+}
+
+func contains(s []int, e int) bool {
+	for _, x := range s {
+		if e == x {
+			return true
+		}
+	}
+	return false
+}
+
 func (n *BFSNetwork) findRandomPeers(rootPeer int) {
 	// Generates log(n) random peers.
 	// TODO: actually use random walk to generate peers.
 
 	var peers []int
-	for i := 0; i < min(len(n.net) - 1, 8); i++ {
+	for i := 0; i < min(len(n.net) - 1, NUM_PEERS); i++ {
 		r := rand.Intn(len(n.net))
-		for r == n.sv.me {
+		for r == n.sv.me || contains(peers, r) {
 			r = rand.Intn(len(n.net))
 		}
 		peers = append(peers, r)
 	}
 	n.peers = peers
-	fmt.Printf("Peers on %d are %v\n", n.sv.me, n.peers)
+//	fmt.Printf("Peers on %d are %v\n", n.sv.me, n.peers)
 }
 
 func MakeBFSNetwork(sv *Server) *BFSNetwork {
@@ -223,6 +308,8 @@ func MakeBFSNetwork(sv *Server) *BFSNetwork {
 	n.net = sv.network
 
 	n.findRandomPeers(0)
+
+	n.setup()
 
 	return n
 }

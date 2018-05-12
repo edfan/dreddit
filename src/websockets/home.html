@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>WebSockets Reddit</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script>
+    function _atob( buffer ) {
+    var binary = '';
+    var bytes = new Uint8Array( buffer );
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode( bytes[ i ] );
+    }
+    return window.btoa( binary );
+}
+    
+window.onload = function () {
+    var conn;
+    var msg = document.getElementById("msg");
+    var log = document.getElementById("log");
+    var last = {};
+
+    function appendLog(item) {
+        var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+        log.appendChild(item);
+        if (doScroll) {
+            log.scrollTop = log.scrollHeight - log.clientHeight;
+        }
+    }
+    
+    $("#new").click(function () {
+        if (!conn) {
+            return false;
+        }
+        
+        var m = {};
+        m["kind"] = "NewPost";
+        m["node"] = 0;
+        m["username"] = "ezfn";
+        m["title"] = "test";
+        m["body"] = "test post";
+        m["parentHash"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        m["replyToHash"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        console.log(m);
+        conn.send(JSON.stringify(m));
+        
+        return false;
+    });
+
+    $("#get").click(function () {
+        if (!conn) {
+            return false;
+        }
+
+        if (last === {}) {
+            return false;
+        }
+console.log(last)
+
+        var m = {};
+      m["kind"] = "GetPost";
+      m["node"] = 0;
+        m["hash"] = _atob(last.Hash);
+        m["parentHash"] = _atob(last.ParentHash);
+        m["replyToHash"] = _atob(last.ReplyToHash);
+        console.log(m);
+        conn.send(JSON.stringify(m));
+        
+        return false;
+    });
+    
+    if (window["WebSocket"]) {
+        conn = new WebSocket("ws://" + document.location.host + "/ws");
+        conn.onclose = function (evt) {
+            var item = document.createElement("div");
+            item.innerHTML = "<b>Connection closed.</b>";
+            appendLog(item);
+        };
+        conn.onmessage = function (evt) {
+            var m = JSON.parse(evt.data)
+            msg = m.Data
+            console.log(m)
+
+            if (m.Kind === "Header") {
+                var item = document.createElement("div");
+                item.innerText = "Header: " + msg.Username + " " + msg.Title;
+                last["Hash"] = msg.Seed.Hash.slice()
+                last["ParentHash"] = msg.Seed.ParentHash.slice()
+                last["ReplyToHash"] = msg.Seed.ReplyToHash.slice()
+                appendLog(item);
+            } else if (m.Kind === "Post") {
+                var item = document.createElement("div");
+                item.innerText = "Post: " + msg.Username + " " + msg.Title + " " + msg.Body;
+                appendLog(item);
+            }
+        };
+    } else {
+        var item = document.createElement("div");
+        item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+        appendLog(item);
+    }
+};
+</script>
+<style type="text/css">
+html {
+    overflow: hidden;
+}
+
+body {
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: gray;
+}
+
+#log {
+    background: white;
+    margin: 0;
+padding: 0.5em 0.5em 0.5em 0.5em;
+position: absolute;
+    top: 0.5em;
+    left: 0.5em;
+    right: 0.5em;
+    bottom: 3em;
+    overflow: auto;
+}
+
+#form {
+    padding: 0 0.5em 0 0.5em;
+    margin: 0;
+    position: absolute;
+    bottom: 1em;
+    left: 0px;
+    width: 100%;
+    overflow: hidden;
+}
+
+</style>
+</head>
+<body>
+  <div id="log"></div>
+  <div>
+    <button id="new">New post</button>
+    <button id="get">Get post</button>
+  </div>
+</body>
+</html>
