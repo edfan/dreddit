@@ -77,6 +77,7 @@ func (cfg *Config) start1(i int, o interface{}) {
 	sv := MakeServer(ends, i, o)
 	cfg.Servers[i] = sv
 
+
 	svc := labrpc.MakeService(sv.net)
 	srv := labrpc.MakeServer()
 	srv.AddService(svc)

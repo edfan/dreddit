@@ -1,6 +1,8 @@
 package dreddit
 import "labrpc"
 import "time"
+//import "fmt"
+
 
 
 type GossipArgs struct{
@@ -48,6 +50,9 @@ func (dn *DredditNode) GossipHandling(args *GossipArgs, resp *GossipResp){
 }
 
 func (dn *DredditNode) SendGossipHandling(network []*labrpc.ClientEnd, server int, args *GossipArgs, reply *GossipResp) (bool){
+	if dn.me == server{
+		return false
+	}
 	ok := network[server].Call("DredditNode.GossipHandling", args, reply)
 	return ok
 }
@@ -56,6 +61,11 @@ func (dn *DredditNode) SendGossipHandling(network []*labrpc.ClientEnd, server in
 func (dn *DredditNode) BackgroundGossip(){
 	for true{
 		dn.sv.mu.Lock()
+		if len(dn.peers) == 0{
+			dn.sv.mu.Unlock()
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
 		chosen_peer := GetRandomKey(dn.peers)
 
 		var args GossipArgs
@@ -67,7 +77,14 @@ func (dn *DredditNode) BackgroundGossip(){
 		}
 		var resp GossipResp
 
+		dn.sv.mu.Unlock()
+
 		ok := dn.SendGossipHandling(dn.network, chosen_peer, &args, &resp)
+
+		time.Sleep(100 * time.Millisecond)
+
+
+		dn.sv.mu.Lock()
 
 		var add bool
 		if ok{
@@ -87,7 +104,7 @@ func (dn *DredditNode) BackgroundGossip(){
 		}
 
 		dn.sv.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

@@ -18,8 +18,8 @@ func mod(d, m int) int {
 func TestDSH(t *testing.T) {
 	fmt.Println("Starting TestDSH...")
 
-	n := 16	
-	perLayer := 4
+	n := 64	
+	perLayer := 16
 	layers := n / perLayer
 	var dshConfig []dshOptions
 	var r int
@@ -51,7 +51,7 @@ func TestDSH(t *testing.T) {
 		}
 
 		o.isStorage = true
-		o.M = byte(layer)
+		o.M = layer
 
 		// Choose random storage peer from layer below.
 		//r := rand.Intn(perLayer) + perLayer * mod(layer - 1, layers)
@@ -59,18 +59,31 @@ func TestDSH(t *testing.T) {
 
 		// Choose random storage peer from same layer.
 		o.initialStoragePeerSame = make(map[int]int)
-		r = rand.Intn(perLayer) + perLayer * layer
-		for r == i {
+		counter := 0
+		for counter < perLayer/2{
 			r = rand.Intn(perLayer) + perLayer * layer
+			_, ok := o.initialStoragePeerAbove[r]
+			if !ok && r != i{
+				o.initialStoragePeerSame[r] = 0
+				counter++
+			}
 		}
 		//o.initialStoragePeerSame = append(o.initialStoragePeerSame, r)
-		o.initialStoragePeerSame[r] = 0 
 
 		// Choose random storage peer from layer below.
 		o.initialStoragePeerAbove = make(map[int]int)
-		r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
+		//r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
+		counter = 0
+		for counter < perLayer/2{
+			r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
+			_, ok := o.initialStoragePeerAbove[r]
+			if !ok{
+				o.initialStoragePeerAbove[r] = 0
+				counter++
+			}
+		}
 		//o.initialStoragePeerAbove = append(o.initialStoragePeerAbove, r)
-		o.initialStoragePeerAbove[r] = 0 
+		//o.initialStoragePeerAbove[r] = 0 
 
 		dshConfig = append(dshConfig, o)
 	}
@@ -94,10 +107,13 @@ func TestDSH(t *testing.T) {
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, _ := cfg.Servers[i].GetPost(hashes[j])
+			op, found := cfg.Servers[i].GetPost(hashes[j])
+			for !found{
+				op, found = cfg.Servers[i].GetPost(hashes[j])
+			}
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
-				// fmt.Printf("Server %d has post from %d\n", i, j)
+//				fmt.Printf("Server %d has post from %d\n", i, j)
 			} else {
 				fmt.Printf("Server %d missing post from %d, post received %v\n", i, j, p)
 				t.Fail()
@@ -105,3 +121,5 @@ func TestDSH(t *testing.T) {
 		}
 	}
 }
+
+

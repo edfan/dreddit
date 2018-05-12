@@ -1,5 +1,6 @@
 package dreddit
 import "labrpc"
+//import "fmt"
 
 const(
 	MAX_STORAGE_PEERS = 8
@@ -12,7 +13,7 @@ type dshOptions struct {
 	initialPeers map[int]int
 	initialStorage map[int]int
 	isStorage bool
-	M byte
+	M int
 	initialStoragePeerSame map[int]int
 	initialStoragePeerAbove map[int]int
 }
@@ -44,13 +45,15 @@ func (dn *DredditNode) PleaseDownload(args *PleaseDownloadArgs, resp *PleaseDown
 }
 
 func (dn *DredditNode) SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp) (bool){
+	if dn.me == server{
+		return false
+	}
 	ok := network[server].Call("DredditNode.PleaseDownload", args, reply)
 	return ok
 }
 
 
 func (dn *DredditNode) NewPost(sp SignedPost) bool {
-
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
@@ -62,7 +65,7 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 	}
 
 	a := -1
-	r, ok := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
+	r, ok := dn.storage[mod(nodeM+1, NUM_LAYERS)]
 	if ok{
 		a = r
 	}
@@ -110,6 +113,9 @@ func (dn *DredditNode) PleaseSend(args *PleaseSendArgs, resp *PleaseSendResp){
 }
 
 func (dn *DredditNode) SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp) (bool){
+	if dn.me == server{
+		return false
+	}
 	ok := network[server].Call("DredditNode.PleaseSend", args, reply)
 	return ok
 }
@@ -131,7 +137,7 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 	}
 
 	a := -1
-	r, ok := dn.storage_peers_above[(nodeM+1)%NUM_LAYERS]
+	r, ok := dn.storage[mod(nodeM+1, NUM_LAYERS)]
 	if ok{
 		a = r
 	}
@@ -161,14 +167,17 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 
 func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 
+
 	node, ok := dn.storage[M]
 	if ok{
 		return true, node
 	}
 
-	node, ok = dn.storage[(M+1)%NUM_LAYERS]
+
+
+	node, ok = dn.storage[mod((M-1), NUM_LAYERS)]
 	if !ok{
-		ok, node = dn.FindStorageLayer((M+1)%NUM_LAYERS)
+		ok, node = dn.FindStorageLayer(mod((M-1), NUM_LAYERS))
 		if !ok{
 			return false, node
 		}
@@ -176,11 +185,15 @@ func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 	var resp GetRandomResponse
 	var args GetRandomArgs
 	args = GetRandomArgs{T: 1, Direction: 1}
+
 	ok = dn.SendGetRandom(dn.network, node, &args, &resp)
 	if !ok{
-		delete(dn.storage, (M+1)%NUM_LAYERS)
+		delete(dn.storage, mod((M-1), NUM_LAYERS))
 		return false, node
 	}else{
+		if !resp.Success{
+			return false, resp.Node
+		}
 		dn.storage[M] = resp.Node
 		return true, resp.Node
 	}
@@ -194,7 +207,7 @@ type DredditNode struct {
 	storage             map[int]int
 	storage_peers_same  map[int]int
 	storage_peers_above map[int]int
-	M                   byte
+	M                   int
 	network             []*labrpc.ClientEnd
 	isStorage	        bool
 	Seeds               []HashTriple
@@ -213,13 +226,14 @@ func MakeDredditNode(sv *Server, o dshOptions) *DredditNode {
 	dn.storage = o.initialStorage
 	dn.network = sv.network
 	dn.isStorage = o.isStorage
-	dn.FullGossip()
+	//dn.FullGossip()
 
 	if o.isStorage {
 		dn.M = o.M
 		dn.storage_peers_above = o.initialStoragePeerAbove
 		dn.storage_peers_same = o.initialStoragePeerSame
 	}
+	dn.StartDredditNode()
 	return dn
 }
 

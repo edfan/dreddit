@@ -166,7 +166,6 @@ func MakeServer(network []*labrpc.ClientEnd, me int, options interface{}) *Serve
 
 	// Change this to change the network type.
         // sv.net = MakeBroadcastNetwork(sv)
-	sv.net = MakeBFSNetwork(sv)
-
+	sv.net = MakeDredditNode(sv, options.(dshOptions))
 	return sv
 }
