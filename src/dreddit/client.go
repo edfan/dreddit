@@ -7,7 +7,7 @@ import (
 
 // Implements a simple front-end that contains a server (+ network node).
 // Reads posts; forwards headers via HeaderCh.
-// Can create a post by sending to NewPostCh
+// Can create a post by calling NewPost.
 // Can read a post by calling GetPost.
 // Can get all headers via PostQueue.
 
@@ -24,7 +24,6 @@ type Client struct {
 	Sv        *Server
 
 	HeaderCh  chan Header
-	NewPostCh chan Post
 }
 
 func createHeader(sp SignedPost) Header {
@@ -48,25 +47,18 @@ func (c *Client) PostReader() {
 	}
 }
 
-func (c *Client) NewPostReader() {
-	// Long-running function that sends new post requests.
-
-	for {
-		select {
-		case p := <- c.NewPostCh:
-			sp := c.Sv.NewPost(p)
-			h := createHeader(sp)
-			c.HeaderCh <- h
-			c.PostQueue = append(c.PostQueue, h)
-			c.PostCount++
-		}
-	}
+func (c *Client) NewPost(p Post) {
+	sp := c.Sv.NewPost(p)
+	h := createHeader(sp)
+	c.HeaderCh <- h
+	c.PostQueue = append(c.PostQueue, h)
+	c.PostCount++
 }
 
-func (c *Client) GetPost(h Header) (Post, bool) {
-	sp, ok := c.Sv.GetPost(h.Seed)
+func (c *Client) GetPost(seed HashTriple) (Post, bool) {
+	sp, ok := c.Sv.GetPost(seed)
 	if ok {
-		return verifyPost(sp, sp.Seed)
+		return verifyPost(sp, seed)
 	} else {
 		return Post{}, false
 	}
@@ -76,7 +68,6 @@ func MakeClient(sv *Server) *Client {
 	c := &Client{}
 	c.Sv = sv
 	c.HeaderCh = make(chan Header)
-	c.NewPostCh = make(chan Post)
 
 	go c.PostReader()
 	

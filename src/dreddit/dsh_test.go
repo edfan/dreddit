@@ -66,7 +66,7 @@ func TestDSH(t *testing.T) {
 		dshConfig = append(dshConfig, o)
 	}
 
-	cfg := make_config(n, dshConfig)
+	cfg := Make_config(n, dshConfig)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -74,7 +74,7 @@ func TestDSH(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p).Seed
+			hashes[i] = cfg.Servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -85,7 +85,7 @@ func TestDSH(t *testing.T) {
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, _ := cfg.servers[i].GetPost(hashes[j])
+			op, _ := cfg.Servers[i].GetPost(hashes[j])
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
 				// fmt.Printf("Server %d has post from %d\n", i, j)

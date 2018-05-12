@@ -22,16 +22,16 @@ func TestSignMessage(t *testing.T) {
 func TestBFSNetworkSimple(t *testing.T) {
 	fmt.Println("\nStarting TestBFSNetworkSimple...")
 	
-	cfg := make_config(2, nil)
+	cfg := Make_config(2, nil)
 	defer cfg.cleanup()
 
  	p := Post{Username: "ezfn", Title: "Test post", Body: "test post please ignore"}
 	fmt.Println("Input post:", p)
-	hash :=	cfg.servers[0].NewPost(p).Seed
+	hash :=	cfg.Servers[0].NewPost(p).Seed
 	
 	time.Sleep(100 * time.Millisecond)
 	
-	op, _ := cfg.servers[1].GetPost(hash)
+	op, _ := cfg.Servers[1].GetPost(hash)
 	dp, _ := verifyPost(op, hash)
 	fmt.Println("Output post:", dp)
 }
@@ -40,7 +40,7 @@ func TestBFSNetworkConcurrentNewPosts(t *testing.T) {
 	fmt.Println("\nStarting TestBFSNetworkConcurrentNewPosts...")
 
 	n := 25
-	cfg := make_config(n, nil)
+	cfg := Make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -48,7 +48,7 @@ func TestBFSNetworkConcurrentNewPosts(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p).Seed
+			hashes[i] = cfg.Servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -59,7 +59,7 @@ func TestBFSNetworkConcurrentNewPosts(t *testing.T) {
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, _ := cfg.servers[i].GetPost(hashes[j])
+			op, _ := cfg.Servers[i].GetPost(hashes[j])
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
 				// fmt.Printf("Server %d has post from %d\n", i, j)
@@ -78,7 +78,7 @@ func TestBFSNetworkDisconnect(t *testing.T) {
 
 	n := 25
 	s := 15
-	cfg := make_config(n, nil)
+	cfg := Make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -91,7 +91,7 @@ func TestBFSNetworkDisconnect(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p).Seed
+			hashes[i] = cfg.Servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -108,7 +108,7 @@ func TestBFSNetworkDisconnect(t *testing.T) {
 	for i := 0; i < n; i++ {
 		for j := 0; j < s; j++ {
 			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, _ := cfg.servers[i].GetPost(hashes[j])
+			op, _ := cfg.Servers[i].GetPost(hashes[j])
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
 				// fmt.Printf("Server %d has post from %d\n", i, j)
@@ -127,7 +127,7 @@ func TestBFSDeletePosts(t *testing.T) {
 
 	n := 25
 	s := 10
-	cfg := make_config(n, nil)
+	cfg := Make_config(n, nil)
 	defer cfg.cleanup()
 	hashes := make([]HashTriple, n)
 
@@ -135,7 +135,7 @@ func TestBFSDeletePosts(t *testing.T) {
 		go func(i int) {
 			p := Post{Username: "ezfn", Title: "Test post",
 				Body: fmt.Sprintf("test post from %d", i)}
-			hashes[i] = cfg.servers[i].NewPost(p).Seed
+			hashes[i] = cfg.Servers[i].NewPost(p).Seed
 		}(i)
 	}
 
@@ -146,15 +146,15 @@ func TestBFSDeletePosts(t *testing.T) {
 	// On s random nodes, delete all posts except those authored by the node.
 	for i := s; i < n; i++ {
 		r := rand.Intn(n)
-		rp := cfg.servers[r].Posts[hashes[r]]
-		cfg.servers[r].Posts = make(map[HashTriple]SignedPost)
-		cfg.servers[r].Posts[hashes[r]] = rp
+		rp := cfg.Servers[r].Posts[hashes[r]]
+		cfg.Servers[r].Posts = make(map[HashTriple]SignedPost)
+		cfg.Servers[r].Posts[hashes[r]] = rp
 	}
 
 	for i := 0; i < n; i++ {
 		for j := 0; j < s; j++ {
 			fmt.Printf("Server %d looking for post from %d\n", i, j)
-			op, _ := cfg.servers[i].GetPost(hashes[j])
+			op, _ := cfg.Servers[i].GetPost(hashes[j])
 			p, ok := verifyPost(op, hashes[j])
 			if ok {
 				// fmt.Printf("Server %d has post from %d\n", i, j)

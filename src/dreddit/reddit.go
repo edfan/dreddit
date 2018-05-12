@@ -162,7 +162,7 @@ func MakeServer(network []*labrpc.ClientEnd, me int, options interface{}) *Serve
 	sv.me = me
 	
 	sv.Posts = make(map[HashTriple]SignedPost)
-	sv.PostsCh = make(chan SignedPost, 10)
+	sv.PostsCh = make(chan SignedPost, 100)
 
 	// Change this to change the network type.
         // sv.net = MakeBroadcastNetwork(sv)
