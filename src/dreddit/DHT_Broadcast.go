@@ -1,6 +1,6 @@
 package dreddit
 import "labrpc"
-//import "fmt"
+import "fmt"
 
 const(
 	MAX_STORAGE_PEERS = 8
@@ -177,6 +177,7 @@ func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 
 	node, ok = dn.storage[mod((M-1), NUM_LAYERS)]
 	if !ok{
+		fmt.Println("of course we're here", M, dn.me)
 		ok, node = dn.FindStorageLayer(mod((M-1), NUM_LAYERS))
 		if !ok{
 			return false, node
