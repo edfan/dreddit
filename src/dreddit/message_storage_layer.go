@@ -19,11 +19,6 @@ func (dn *DredditNode) PostGossipHandling(args *PostGossipArgs, resp *PostGossip
 	dn.sv.mu.Lock()
 	defer dn.sv.mu.Unlock()
 
-	if len(dn.storage_peers_same) > MAX_STORAGE_PEERS{
-		resp.Success = false
-		return
-	}
-
 	dn.storage_peers_same[args.Sender] = 0
 
 	if GOSSIP_SIZE <= len(dn.Posts){
@@ -43,9 +38,12 @@ func (dn *DredditNode) PostGossipHandling(args *PostGossipArgs, resp *PostGossip
 }
 
 func (dn *DredditNode) SendPostGossipHandling(network []*labrpc.ClientEnd, server int, args *PostGossipArgs, reply *PostGossipResp) (bool){
+	dn.sv.mu.Lock()
 	if dn.me == server{
+		dn.sv.mu.Unlock()
 		return false
 	}
+	dn.sv.mu.Unlock()
 	ok := network[server].Call("DredditNode.PostGossipHandling", args, reply)
 	return ok
 }

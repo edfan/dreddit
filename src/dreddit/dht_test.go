@@ -60,7 +60,7 @@ func TestDHT(t *testing.T) {
 		// Choose random storage peer from same layer.
 		o.initialStoragePeerSame = make(map[int]int)
 		counter := 0
-		for counter < perLayer/2{
+		for counter < (perLayer/2 - 2){
 			r = rand.Intn(perLayer) + perLayer * layer
 			_, ok := o.initialStoragePeerAbove[r]
 			if !ok && r != i{
@@ -68,13 +68,15 @@ func TestDHT(t *testing.T) {
 				counter++
 			}
 		}
+		o.initialStoragePeerSame[perLayer * layer] = 0
+		o.initialStoragePeerSame[perLayer * (layer+1)] = 0
 		//o.initialStoragePeerSame = append(o.initialStoragePeerSame, r)
 
 		// Choose random storage peer from layer below.
 		o.initialStoragePeerAbove = make(map[int]int)
 		//r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
 		counter = 0
-		for counter < perLayer/2{
+		for counter < (perLayer/2 - 2){
 			r = rand.Intn(perLayer) + perLayer * mod(layer + 1, layers)
 			_, ok := o.initialStoragePeerAbove[r]
 			if !ok{
@@ -84,6 +86,8 @@ func TestDHT(t *testing.T) {
 		}
 		//o.initialStoragePeerAbove = append(o.initialStoragePeerAbove, r)
 		//o.initialStoragePeerAbove[r] = 0 
+		o.initialStoragePeerSame[perLayer * layer] = 0
+		o.initialStoragePeerSame[perLayer * (layer+1)] = 0
 
 		dshConfig = append(dshConfig, o)
 	}

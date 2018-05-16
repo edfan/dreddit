@@ -46,9 +46,12 @@ func (dn *DredditNode) PleaseDownload(args *PleaseDownloadArgs, resp *PleaseDown
 }
 
 func (dn *DredditNode) SendPleaseDownload(network []*labrpc.ClientEnd, server int, args *PleaseDownloadArgs, reply *PleaseDownloadResp) (bool){
+	dn.sv.mu.Lock()
 	if dn.me == server{
+		dn.sv.mu.Unlock()
 		return false
 	}
+	dn.sv.mu.Unlock()
 	ok := network[server].Call("DredditNode.PleaseDownload", args, reply)
 	return ok
 }
@@ -60,7 +63,10 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
 	nodeM := int(sp.Seed.Hash[0] >> (8-LOG_NUM_LAYERS))
 
+
+	dn.sv.mu.Unlock()
 	ok, current_node := dn.FindStorageLayer(nodeM)
+	dn.sv.mu.Lock()
 	if !ok{
 		return false
 	}
@@ -73,7 +79,9 @@ func (dn *DredditNode) NewPost(sp SignedPost) bool {
 
 	args := PleaseDownloadArgs{Post: sp, Seed: sp.Seed, SuggestAbove: a}
 	var resp PleaseDownloadResp
+	dn.sv.mu.Unlock()
 	ok = dn.SendPleaseDownload(dn.network, current_node, &args, &resp)
+	dn.sv.mu.Lock()
 
 	if ok{
 		return true
@@ -114,9 +122,12 @@ func (dn *DredditNode) PleaseSend(args *PleaseSendArgs, resp *PleaseSendResp){
 }
 
 func (dn *DredditNode) SendPleaseSend(network []*labrpc.ClientEnd, server int, args *PleaseSendArgs, reply *PleaseSendResp) (bool){
+	dn.sv.mu.Lock()
 	if dn.me == server{
+		dn.sv.mu.Unlock()
 		return false
 	}
+	dn.sv.mu.Unlock()
 	ok := network[server].Call("DredditNode.PleaseSend", args, reply)
 	return ok
 }
@@ -129,7 +140,9 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 
 	nodeM := int(sd.Hash[0] >> (8-LOG_NUM_LAYERS))
 
+	dn.sv.mu.Unlock()
 	ok, current_node := dn.FindStorageLayer(nodeM)
+	dn.sv.mu.Lock()
 
 	var return_post SignedPost
 	
@@ -144,8 +157,10 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 	}
 
 	args := PleaseSendArgs{Seed: sd, SuggestAbove: a}
-	var resp PleaseSendResp 
+	var resp PleaseSendResp
+	dn.sv.mu.Unlock() 
 	ok = dn.SendPleaseSend(dn.network, current_node, &args, &resp)
+	dn.sv.mu.Lock()
 
 	if !ok{
 		delete(dn.storage, nodeM)
@@ -167,6 +182,8 @@ func (dn *DredditNode) GetPost(sd HashTriple) (SignedPost, bool) {
 
 
 func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
+	dn.sv.mu.Lock()
+	defer dn.sv.mu.Unlock()
 
 
 	node, ok := dn.storage[M]
@@ -179,7 +196,9 @@ func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 	node, ok = dn.storage[mod((M-1), NUM_LAYERS)]
 	if !ok{
 //		fmt.Println("of course we're here", M, dn.me)
+		dn.sv.mu.Unlock()
 		ok, node = dn.FindStorageLayer(mod((M-1), NUM_LAYERS))
+		dn.sv.mu.Lock()
 		if !ok{
 			return false, node
 		}
@@ -187,8 +206,9 @@ func (dn *DredditNode) FindStorageLayer(M int) (bool, int){
 	var resp GetRandomResponse
 	var args GetRandomArgs
 	args = GetRandomArgs{T: 1, Direction: 1}
-
+	dn.sv.mu.Unlock()
 	ok = dn.SendGetRandom(dn.network, node, &args, &resp)
+	dn.sv.mu.Lock()
 	if !ok{
 		delete(dn.storage, mod((M-1), NUM_LAYERS))
 		return false, node

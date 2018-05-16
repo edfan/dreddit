@@ -50,9 +50,12 @@ func (dn *DredditNode) GossipHandling(args *GossipArgs, resp *GossipResp){
 }
 
 func (dn *DredditNode) SendGossipHandling(network []*labrpc.ClientEnd, server int, args *GossipArgs, reply *GossipResp) (bool){
+	dn.sv.mu.Lock()
 	if dn.me == server{
+		dn.sv.mu.Unlock()
 		return false
 	}
+	dn.sv.mu.Unlock()
 	ok := network[server].Call("DredditNode.GossipHandling", args, reply)
 	return ok
 }
