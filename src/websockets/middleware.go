@@ -32,7 +32,7 @@ func makeMiddleware(n int) *middleware {
 	m.unregister = make(chan *WClient)
 
 	// Set up clients and servers.
-	cfg := dreddit.Make_config(n, nil)
+	cfg := dreddit.Make_config(n, dreddit.BFS, nil)
 	for i := 0; i < n; i++ {
 		c := dreddit.MakeClient(cfg.Servers[i])
 		m.dClients = append(m.dClients, c)
@@ -48,25 +48,26 @@ func makeMiddleware(n int) *middleware {
 			}
 		}(i)
 	}
+
+	fmt.Println("Nodes have been set up")
 	
 	return m
 }
 
 func (m *middleware) run() {
 	for {
-		fmt.Println("in run")
 		select {
 		case client := <-m.register:
-			fmt.Println("registered node", client.node)
+			fmt.Println("Registered node", client.node)
 			m.wClients[client.node] = client
 		case client := <-m.unregister:
-			fmt.Println("unregistered node", client.node)
+			fmt.Println("Unregistered node", client.node)
 			if _, ok := m.wClients[client.node]; ok {
 				delete(m.wClients, client.node)
 				close(client.send)
 			}
 		case msg := <-m.outbound:
-			fmt.Println("Outbound message in run")
+//			fmt.Println("Outbound message in run")
 			b, err := json.Marshal(msg)
 			if err != nil {
 				fmt.Printf("json marshal err: %v", err)
@@ -80,7 +81,7 @@ func (m *middleware) run() {
 				}
 			}
 		case msg := <-m.inbound:
-			fmt.Println("inbound message")
+//			fmt.Println("inbound message")
 			var dat map[string]interface{}
 			if err := json.Unmarshal(msg, &dat); err != nil {
 				continue
@@ -94,13 +95,14 @@ func (m *middleware) run() {
 					var phc, rthc [32]byte
 					copy(phc[:], ph[:32])
 					copy(rthc[:], rth[:32])
-					
 					p := dreddit.Post{Username: dat["username"].(string),
 						Title: dat["title"].(string),
 						Body: dat["body"].(string),
 						ParentHash: phc,
 						ReplyToHash: rthc}
-					m.dClients[int(dat["node"].(float64))].NewPost(p)
+					i := int(dat["node"].(float64))
+					m.dClients[i].NewPost(p)
+					fmt.Printf("Node %d created new post\n", i)
 				}(dat)
 			case "GetPost":
 				go func(dat map[string]interface{}) {
@@ -115,6 +117,7 @@ func (m *middleware) run() {
 					i := int(dat["node"].(float64))
 					ht := dreddit.HashTriple{Hash: hc, ParentHash: phc, ReplyToHash: rthc}
 					p, ok := m.dClients[i].GetPost(ht)
+					fmt.Printf("Node %d getting post\n", i)
 					var omsg outMessage
 					if ok {
 						omsg = outMessage{Node: i, Kind: "Post", Data: p}

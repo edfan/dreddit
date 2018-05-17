@@ -1,0 +1,23 @@
+body {
+    margin: 5%;
+}
+
+#container {
+    margin-top: 10px;
+}
+
+.post {
+    width: 90%;
+    padding: 7px;
+    border: 1px solid #aaaaaa;
+    border-radius: 5px;
+    margin: 5px 0px;
+}
+
+.post > .post {
+    width: 100%;
+}
+
+.comment-reply {
+    margin-bottom: 15px; 
+}

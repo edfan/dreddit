@@ -20,7 +20,6 @@ type dshOptions struct {
 }
 
 
-
 type PleaseDownloadArgs struct{
 	Post SignedPost
 	Seed HashTriple
@@ -29,6 +28,14 @@ type PleaseDownloadArgs struct{
 
 type PleaseDownloadResp struct{
 	Success bool
+}
+
+func mod(d, m int) int {
+   var res int = d % m
+   if ((res < 0 && m > 0) || (res > 0 && m < 0)) {
+      return res + m
+   }
+   return res
 }
 
 func (dn *DredditNode) PleaseDownload(args *PleaseDownloadArgs, resp *PleaseDownloadResp){

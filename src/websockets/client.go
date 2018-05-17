@@ -9,10 +9,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
-	"fmt"
+//	"fmt"
 
 	"github.com/gorilla/websocket"
 )
@@ -36,7 +37,12 @@ var (
 	space   = []byte{' '}
 )
 
+func checkOrigin(r *http.Request) bool {
+	return true
+}
+
 var upgrader = websocket.Upgrader{
+	CheckOrigin: checkOrigin,
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
@@ -73,7 +79,7 @@ func (c *WClient) readPump() {
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
 		_, message, err := c.conn.ReadMessage()
-		fmt.Println("Inbound message in client")
+//		fmt.Println("Inbound message in client")
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -99,7 +105,7 @@ func (c *WClient) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
-			fmt.Println("Outbound message in client")
+//			fmt.Println("Outbound message in client")
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
@@ -165,4 +171,7 @@ func serveWs(hub *middleware, w http.ResponseWriter, r *http.Request) {
 	// new goroutines.
 	go client.writePump()
 	go client.readPump()
+	
+	b, _ := json.Marshal(outMessage{Node: slot, Kind: "Setup"})
+	client.send <- b
 }
